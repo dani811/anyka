@@ -23,7 +23,7 @@ Minimal Home Assistant + AppDaemon project for Anyka two-way audio communication
 
 ### Installation
 
-**📖 For detailed installation instructions, see [INSTALL.md](INSTALL.md)**
+**📖 For detailed installation instructions, see [INSTALL.md](INSTALL.md) or [QUICKSTART.md](QUICKSTART.md) for a 5-minute guide**
 
 Quick summary:
 
