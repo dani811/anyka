@@ -21,21 +21,22 @@ SERVICE_START_SCHEMA = vol.Schema({
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the Anyka Talk component."""
     
+    session = aiohttp.ClientSession()
+    
     async def handle_start(call: ServiceCall) -> None:
         """Handle the start service call."""
         camera_ip = call.data.get("camera_ip")
         _LOGGER.info("Starting Anyka audio stream to %s", camera_ip)
         
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{APPDAEMON_URL}/start",
-                    json={"camera_ip": camera_ip}
-                ) as response:
-                    if response.status == 200:
-                        _LOGGER.info("Audio stream started successfully")
-                    else:
-                        _LOGGER.error("Failed to start audio stream: %s", response.status)
+            async with session.post(
+                f"{APPDAEMON_URL}/start",
+                json={"camera_ip": camera_ip}
+            ) as response:
+                if response.status == 200:
+                    _LOGGER.info("Audio stream started successfully")
+                else:
+                    _LOGGER.error("Failed to start audio stream: %s", response.status)
         except Exception as e:
             _LOGGER.error("Error starting audio stream: %s", e)
     
@@ -44,12 +45,11 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         _LOGGER.info("Stopping Anyka audio stream")
         
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(f"{APPDAEMON_URL}/stop") as response:
-                    if response.status == 200:
-                        _LOGGER.info("Audio stream stopped successfully")
-                    else:
-                        _LOGGER.error("Failed to stop audio stream: %s", response.status)
+            async with session.post(f"{APPDAEMON_URL}/stop") as response:
+                if response.status == 200:
+                    _LOGGER.info("Audio stream stopped successfully")
+                else:
+                    _LOGGER.error("Failed to stop audio stream: %s", response.status)
         except Exception as e:
             _LOGGER.error("Error stopping audio stream: %s", e)
     
