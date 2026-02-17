@@ -92,10 +92,11 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         except Exception as err:
             _LOGGER.error("Error stopping talk: %s", err)
 
-    async def _read_audio_file(path: str) -> bytes:
-        def _reader() -> bytes:
+    async def _read_audio_file(path: str) -> tuple[bytes, bool]:
+        def _reader() -> tuple[bytes, bool]:
             with open(path, "rb") as file_handle:
-                return file_handle.read(MAX_UPLOAD_BYTES + 1)
+                data = file_handle.read(MAX_UPLOAD_BYTES)
+                return data, bool(file_handle.read(1))
 
         return await hass.async_add_executor_job(_reader)
 
@@ -107,9 +108,9 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         input_format = call.data.get(CONF_INPUT_FORMAT, "wav")
 
         try:
-            audio_bytes = await _read_audio_file(audio_file)
-            if len(audio_bytes) > MAX_UPLOAD_BYTES:
-                _LOGGER.error("Audio file too large (max %s bytes): %s", MAX_UPLOAD_BYTES, audio_file)
+            audio_bytes, too_large = await _read_audio_file(audio_file)
+            if too_large:
+                _LOGGER.error(f"Audio file too large (max {MAX_UPLOAD_BYTES} bytes): {audio_file}")
                 return
 
             form = aiohttp.FormData()
@@ -125,8 +126,12 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
             async with session.post(f"{addon_url}/api/uplink/upload", data=form) as response:
                 if response.status != 200:
-                    result = await response.json()
-                    _LOGGER.error("Failed to upload talk: %s", result.get("error", "Unknown error"))
+                    try:
+                        result = await response.json()
+                        error_message = result.get("error", "Unknown error")
+                    except Exception:
+                        error_message = f"HTTP {response.status}"
+                    _LOGGER.error("Failed to upload talk: %s", error_message)
         except FileNotFoundError:
             _LOGGER.error("Audio file not found: %s", audio_file)
         except Exception as err:

@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 CAMERA_IP = os.getenv('CAMERA_IP', '')
 RTSP_URL = os.getenv('RTSP_URL', '')
 AUDIO_PORT = int(os.getenv('AUDIO_PORT', '10000'))
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 # Flask app
 app = Flask(__name__)
@@ -102,7 +103,8 @@ class AudioManager:
                 if process.returncode == 0:
                     logger.info(f"Uploaded uplink sent to {camera_ip}:{audio_port}")
                     return True, "Uploaded uplink sent"
-                error_message = stderr_data.decode(errors='ignore').strip() or "ffmpeg failed"
+                stderr_text = stderr_data.decode(errors='ignore').strip()
+                error_message = stderr_text or f"ffmpeg failed (return code {process.returncode})"
                 logger.error("Upload uplink failed: %s", error_message)
                 return False, error_message
             except subprocess.TimeoutExpired:
@@ -247,9 +249,11 @@ def api_upload_uplink():
     if audio_file is None:
         return jsonify({'error': 'audio file required'}), 400
 
-    audio_bytes = audio_file.read()
+    audio_bytes = audio_file.read(MAX_UPLOAD_BYTES + 1)
     if not audio_bytes:
         return jsonify({'error': 'audio file is empty'}), 400
+    if len(audio_bytes) > MAX_UPLOAD_BYTES:
+        return jsonify({'error': f'audio file too large (max {MAX_UPLOAD_BYTES} bytes)'}), 413
 
     input_format = request.form.get('input_format', 'wav')
     success, message = audio_manager.upload_uplink(camera_ip, audio_bytes, audio_port, input_format=input_format)
