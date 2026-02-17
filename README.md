@@ -92,7 +92,7 @@ service: anyka_talk.stop_listen
 │                 │   (port 8099)    │                    │                  │         │
 └─────────────────┘                  └────────────────────┘                  └─────────┘
         │                                       │                                  │
-        │ Services:                             │ Uplink (Talk):                   │
+        │ Actions/Services:                     │ Uplink (Talk):                   │
         │ - start_talk                          │ • FFmpeg: Mic → PCM A-law       │
         │ - stop_talk                           │ • TCP → Camera:10000 ────────> │
         │ - start_listen                        │                                  │
@@ -111,7 +111,8 @@ service: anyka_talk.stop_listen
    - Exposes REST API on port 8099
 
 2. **Home Assistant Integration** (`custom_components/anyka_talk`)
-   - Registers 4 services under `anyka_talk`: `start_talk`, `stop_talk`, `start_listen`, `stop_listen`
+   - Registers 4 services (shown as **Actions** in HA 2026 UI) under `anyka_talk`: `start_talk`, `stop_talk`, `start_listen`, `stop_listen`
+   - Includes Device Actions backed by those same services
    - Communicates with addon via HTTP API
    - Enables automation and dashboard integration
 
@@ -163,7 +164,7 @@ automation:
 
 | Component | Version | Notes |
 |-----------|---------|-------|
-| Home Assistant | 2021.12+ | OS/Supervised required for addon |
+| Home Assistant | 2026.1+ | OS/Supervised required for addon |
 | Anyka Camera | Any | Must support TCP audio + RTSP |
 | FFmpeg | Included | Built into addon |
 

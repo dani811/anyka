@@ -20,5 +20,5 @@ sh /path/to/camera_sd_overlay/install.sh /
 ## Notes
 
 - Default port: `10000` (override with `ANYKA_TALK_PORT`).
-- The script tries common talk binaries (`ai_talk`, `talk`).
+- The script tries common talk binaries (`ak_adec_demo`, `ai_talk`, `talk`).
 - If no compatible binary is found, logs are written to `/tmp/anyka_talk_overlay.log`.
