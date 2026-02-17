@@ -76,6 +76,16 @@ data:
   audio_port: 10000  # optional
 ```
 
+Or upload audio bytes (recommended for stable uplink without URL/TTS dependencies):
+
+```yaml
+service: anyka_talk.upload_talk
+data:
+  camera_ip: "192.168.1.100"
+  audio_file: "/config/www/talk.wav"
+  input_format: "wav"
+```
+
 To stop:
 
 ```yaml
@@ -164,6 +174,7 @@ icon: mdi:microphone
 The addon exposes a REST API on port 8099:
 
 - `POST /api/uplink/start` - Start talk (mic → camera)
+- `POST /api/uplink/upload` - Upload audio bytes and stream to camera
 - `POST /api/uplink/stop` - Stop talk
 - `POST /api/downlink/start` - Start listen (camera → speaker)
 - `POST /api/downlink/stop` - Stop listen
