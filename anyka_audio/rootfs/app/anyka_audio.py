@@ -402,10 +402,11 @@ def _render_talk_page(embedded=False):
     default_cam_json = json.dumps(DEFAULT_CAMERA_ID or "")
     talk_mode_json = json.dumps(TALK_MODE if TALK_MODE in ("ptt", "full") else "ptt")
     embedded_json = json.dumps(bool(embedded))
+    body_margin = "8px" if embedded else "20px"
     return f"""
     <html>
     <head><title>Anyka Bidirectional Audio</title></head>
-    <body style="font-family: sans-serif; margin: {'8px' if embedded else '20px'};">
+    <body style="font-family: sans-serif; margin: {body_margin};">
         {'<h1>Anyka Bidirectional Audio Addon</h1>' if not embedded else ''}
         <p><strong>Talk mode:</strong> {TALK_MODE.upper()}</p>
         <label for="camera">Camera:</label>
@@ -420,6 +421,16 @@ def _render_talk_page(embedded=False):
             const embedded = {embedded_json};
             const params = new URLSearchParams(window.location.search);
             const camFromQuery = params.get("cam");
+            const allowedOriginRaw = params.get("parent_origin");
+            let allowedOrigin = "";
+            if (allowedOriginRaw) {{
+                try {{
+                    const parsed = new URL(allowedOriginRaw);
+                    if (parsed.protocol === "http:" || parsed.protocol === "https:") allowedOrigin = parsed.origin;
+                }} catch (_error) {{
+                    console.warn("Invalid parent_origin:", allowedOriginRaw);
+                }}
+            }}
             const cameraSelect = document.getElementById("camera");
             const statusEl = document.getElementById("status");
             const btnPtt = document.getElementById("ptt");
@@ -437,6 +448,7 @@ def _render_talk_page(embedded=False):
                 cameraSelect.appendChild(opt);
             }});
             statusEl.textContent = embedded ? "ready (embedded webview)" : "ready";
+            if (embedded && !allowedOrigin) statusEl.textContent = "ready (commands disabled: set parent_origin)";
 
             async function startTalk() {{
                 if (running) return;
@@ -483,6 +495,9 @@ def _render_talk_page(embedded=False):
             }}
 
             window.addEventListener("message", async (event) => {{
+                if (!embedded) return;
+                if (!allowedOrigin) return;
+                if (event.origin !== allowedOrigin) return;
                 const data = event.data || {{}};
                 if (data.type !== "anyka_talk") return;
                 if (data.cam) cameraSelect.value = data.cam;

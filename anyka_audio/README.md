@@ -196,14 +196,15 @@ For multi-camera setups, select target camera with query param `?cam=<id>` (for 
 
 Use an iframe/webpage card pointing to:
 
-`/api/uplink/webview?cam=front`
+`/api/uplink/webview?cam=front&parent_origin=http://homeassistant.local:8123`
 
 This keeps microphone controls inside the card. The embedded page also accepts `postMessage` commands:
 
 ```js
-iframe.contentWindow.postMessage({ type: "anyka_talk", action: "start", cam: "front" }, "*");
-iframe.contentWindow.postMessage({ type: "anyka_talk", action: "stop" }, "*");
-iframe.contentWindow.postMessage({ type: "anyka_talk", action: "toggle" }, "*");
+const addonOrigin = "http://homeassistant.local:8099"; // iframe src origin
+iframe.contentWindow.postMessage({ type: "anyka_talk", action: "start", cam: "front" }, addonOrigin);
+iframe.contentWindow.postMessage({ type: "anyka_talk", action: "stop" }, addonOrigin);
+iframe.contentWindow.postMessage({ type: "anyka_talk", action: "toggle" }, addonOrigin);
 ```
 
 ## Troubleshooting
