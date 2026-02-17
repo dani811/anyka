@@ -396,17 +396,17 @@ def health():
     return jsonify({'status': 'healthy'}), 200
 
 
-@app.route('/', methods=['GET'])
-def index():
-    """Index page."""
+def _render_talk_page(embedded=False):
+    """Render browser/mobile talk page."""
     cameras_json = json.dumps(list(CAMERAS.values()))
     default_cam_json = json.dumps(DEFAULT_CAMERA_ID or "")
     talk_mode_json = json.dumps(TALK_MODE if TALK_MODE in ("ptt", "full") else "ptt")
+    embedded_json = json.dumps(bool(embedded))
     return f"""
     <html>
     <head><title>Anyka Bidirectional Audio</title></head>
-    <body>
-        <h1>Anyka Bidirectional Audio Addon</h1>
+    <body style="font-family: sans-serif; margin: {'8px' if embedded else '20px'};">
+        {'<h1>Anyka Bidirectional Audio Addon</h1>' if not embedded else ''}
         <p><strong>Talk mode:</strong> {TALK_MODE.upper()}</p>
         <label for="camera">Camera:</label>
         <select id="camera"></select>
@@ -417,6 +417,7 @@ def index():
             const cameras = {cameras_json};
             const defaultCam = {default_cam_json};
             const talkMode = {talk_mode_json};
+            const embedded = {embedded_json};
             const params = new URLSearchParams(window.location.search);
             const camFromQuery = params.get("cam");
             const cameraSelect = document.getElementById("camera");
@@ -435,6 +436,7 @@ def index():
                 if (cam.id === selected) opt.selected = true;
                 cameraSelect.appendChild(opt);
             }});
+            statusEl.textContent = embedded ? "ready (embedded webview)" : "ready";
 
             async function startTalk() {{
                 if (running) return;
@@ -479,10 +481,31 @@ def index():
                 btnPtt.onpointerdown = async (event) => {{ event.preventDefault(); await startTalk(); }};
                 btnPtt.onpointerup = async (event) => {{ event.preventDefault(); await stopTalk(); }};
             }}
+
+            window.addEventListener("message", async (event) => {{
+                const data = event.data || {{}};
+                if (data.type !== "anyka_talk") return;
+                if (data.cam) cameraSelect.value = data.cam;
+                if (data.action === "start") await startTalk();
+                if (data.action === "stop") await stopTalk();
+                if (data.action === "toggle") {{ if (running) await stopTalk(); else await startTalk(); }}
+            }});
         </script>
     </body>
     </html>
     """
+
+
+@app.route('/', methods=['GET'])
+def index():
+    """Index page."""
+    return _render_talk_page(embedded=(request.args.get('embedded') == '1'))
+
+
+@app.route('/api/uplink/webview', methods=['GET'])
+def uplink_webview():
+    """Embeddable webview page for dashboard cards."""
+    return _render_talk_page(embedded=True)
 
 
 if __name__ == '__main__':

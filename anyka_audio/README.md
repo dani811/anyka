@@ -184,12 +184,27 @@ The addon exposes a REST API on port 8099:
 - `POST /api/uplink/chunk` - Send real-time browser chunk to running talk stream
 - `POST /api/uplink/upload` - Upload audio bytes and stream to camera
 - `POST /api/uplink/stop` - Stop talk
+- `GET /api/uplink/webview` - Embeddable mic webview for dashboard cards
 - `POST /api/downlink/start` - Start listen (camera → speaker)
 - `POST /api/downlink/stop` - Stop listen
 - `GET /api/status` - Get stream status
 - `GET /health` - Health check
 
 For multi-camera setups, select target camera with query param `?cam=<id>` (for example `/?cam=front` in web UI or `/api/uplink/start?cam=front`).
+
+### Embedded dashboard card (no navigation out of card)
+
+Use an iframe/webpage card pointing to:
+
+`/api/uplink/webview?cam=front`
+
+This keeps microphone controls inside the card. The embedded page also accepts `postMessage` commands:
+
+```js
+iframe.contentWindow.postMessage({ type: "anyka_talk", action: "start", cam: "front" }, "*");
+iframe.contentWindow.postMessage({ type: "anyka_talk", action: "stop" }, "*");
+iframe.contentWindow.postMessage({ type: "anyka_talk", action: "toggle" }, "*");
+```
 
 ## Troubleshooting
 
