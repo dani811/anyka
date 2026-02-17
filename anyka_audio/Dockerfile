@@ -4,15 +4,13 @@ FROM $BUILD_FROM
 # Install ffmpeg and required packages
 RUN apk add --no-cache \
     python3 \
-    py3-pip \
     ffmpeg \
     alsa-utils \
     pulseaudio \
     pulseaudio-alsa \
-    && pip3 install --no-cache-dir \
-    aiohttp \
-    flask \
-    flask-cors
+    py3-aiohttp \
+    py3-flask \
+    py3-flask-cors
 
 # Copy run script
 COPY run.sh /
