@@ -10,6 +10,7 @@ arch:
 ports:
   1984/tcp: 1984
   8554/tcp: 8554
+  10000/tcp: 10000
 options:
   camera_rtsp_url: "rtsp://user:password@camera-ip:554/stream1"
   camera_talkback_url: "rtsp://user:password@camera-ip:554/backchannel"

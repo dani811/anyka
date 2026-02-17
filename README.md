@@ -22,3 +22,4 @@ Monorepo HAOS mínimo con un add-on para audio bidireccional inmediato en cámar
 4. Inicia el add-on y valida:
    - API go2rtc: `http://<ha-ip>:1984`
    - RTSP local: `rtsp://<ha-ip>:8554/anyka`
+   - Puerto adicional `tcp://<ha-ip>:10000` (canal auxiliar para integración de audio/talkback según despliegue)
