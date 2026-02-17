@@ -189,7 +189,7 @@ The addon exposes a REST API on port 8099:
 - `GET /api/status` - Get stream status
 - `GET /health` - Health check
 
-For multi-camera setups, select target camera with query param `?cam=<id>` (for example `/ ?cam=front` in web UI or `/api/uplink/start?cam=front`).
+For multi-camera setups, select target camera with query param `?cam=<id>` (for example `/?cam=front` in web UI or `/api/uplink/start?cam=front`).
 
 ## Troubleshooting
 

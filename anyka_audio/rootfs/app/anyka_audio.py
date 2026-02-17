@@ -3,6 +3,7 @@
 import os
 import sys
 import json
+import re
 import logging
 import subprocess
 import threading
@@ -41,6 +42,9 @@ def _load_cameras(raw_value):
             cam_id = str(item.get('id', '')).strip()
             cam_ip = str(item.get('ip', '')).strip()
             if not cam_id or not cam_ip:
+                continue
+            if not re.fullmatch(r"[A-Za-z0-9_-]+", cam_id):
+                logger.warning("Skipping invalid camera id: %s", cam_id)
                 continue
             talk_port = item.get('talk_port', AUDIO_PORT)
             try:
@@ -395,6 +399,9 @@ def health():
 @app.route('/', methods=['GET'])
 def index():
     """Index page."""
+    cameras_json = json.dumps(list(CAMERAS.values()))
+    default_cam_json = json.dumps(DEFAULT_CAMERA_ID or "")
+    talk_mode_json = json.dumps(TALK_MODE if TALK_MODE in ("ptt", "full") else "ptt")
     return f"""
     <html>
     <head><title>Anyka Bidirectional Audio</title></head>
@@ -407,9 +414,9 @@ def index():
         <button id="toggle">Start/Stop (FULL)</button>
         <pre id="status"></pre>
         <script>
-            const cameras = {json.dumps(list(CAMERAS.values()))};
-            const defaultCam = "{DEFAULT_CAMERA_ID or ''}";
-            const talkMode = "{TALK_MODE}";
+            const cameras = {cameras_json};
+            const defaultCam = {default_cam_json};
+            const talkMode = {talk_mode_json};
             const params = new URLSearchParams(window.location.search);
             const camFromQuery = params.get("cam");
             const cameraSelect = document.getElementById("camera");
@@ -420,7 +427,7 @@ def index():
             let stream = null;
             let running = false;
 
-            const selected = camFromQuery || defaultCam || (cameras[0] ? cameras[0].id : "");
+            const selected = camFromQuery || defaultCam || (Array.isArray(cameras) && cameras.length > 0 ? cameras[0].id : "");
             cameras.forEach((cam) => {{
                 const opt = document.createElement("option");
                 opt.value = cam.id;
@@ -432,38 +439,45 @@ def index():
             async function startTalk() {{
                 if (running) return;
                 const cam = cameraSelect.value || "";
-                await fetch(`/api/uplink/start?cam=${{encodeURIComponent(cam)}}`, {{ method: "POST", headers: {{ "Content-Type": "application/json" }}, body: JSON.stringify({{ input_format: "webm", cam }}) }});
-                stream = await navigator.mediaDevices.getUserMedia({{ audio: true }});
-                recorder = new MediaRecorder(stream, {{ mimeType: "audio/webm" }});
-                recorder.ondataavailable = async (event) => {{
-                    if (!event.data || !event.data.size) return;
-                    await fetch(`/api/uplink/chunk?cam=${{encodeURIComponent(cam)}}`, {{ method: "POST", body: await event.data.arrayBuffer() }});
-                }};
-                recorder.start(250);
-                running = true;
-                statusEl.textContent = `talking to cam=${{cam}}`;
+                try {{
+                    const startRes = await fetch(`/api/uplink/start?cam=${{encodeURIComponent(cam)}}`, {{ method: "POST", headers: {{ "Content-Type": "application/json" }}, body: JSON.stringify({{ input_format: "webm", cam }}) }});
+                    const startData = await startRes.json().catch(() => ({{}}));
+                    if (!startRes.ok) throw new Error(startData.error || "failed to start uplink");
+                    stream = await navigator.mediaDevices.getUserMedia({{ audio: true }});
+                    recorder = new MediaRecorder(stream, {{ mimeType: "audio/webm" }});
+                    recorder.ondataavailable = async (event) => {{
+                        if (!event.data || !event.data.size) return;
+                        const chunkRes = await fetch(`/api/uplink/chunk?cam=${{encodeURIComponent(cam)}}`, {{ method: "POST", body: await event.data.arrayBuffer() }});
+                        if (!chunkRes.ok) statusEl.textContent = `chunk upload failed: ${{chunkRes.status}}`;
+                    }};
+                    recorder.start(250);
+                    running = true;
+                    statusEl.textContent = `talking to cam=${{cam}}`;
+                }} catch (error) {{
+                    statusEl.textContent = `start failed: ${{error.message}}`;
+                    await stopTalk();
+                }}
             }}
 
             async function stopTalk() {{
-                if (!running) return;
-                recorder && recorder.stop();
-                stream && stream.getTracks().forEach((t) => t.stop());
-                await fetch("/api/uplink/stop", {{ method: "POST" }});
+                if (recorder) recorder.stop();
+                if (stream) stream.getTracks().forEach((t) => t.stop());
+                const stopRes = await fetch("/api/uplink/stop", {{ method: "POST" }});
+                const stopData = await stopRes.json().catch(() => ({{}}));
+                if (!stopRes.ok) statusEl.textContent = `stop failed: ${{stopData.error || "unknown"}}`;
                 recorder = null;
                 stream = null;
                 running = false;
-                statusEl.textContent = "stopped";
+                if (stopRes.ok) statusEl.textContent = "stopped";
             }}
 
             if (talkMode === "full") {{
                 btnPtt.style.display = "none";
-                btnToggle.onclick = () => running ? stopTalk() : startTalk();
+                btnToggle.onclick = async () => {{ if (running) await stopTalk(); else await startTalk(); }};
             }} else {{
                 btnToggle.style.display = "none";
-                btnPtt.onmousedown = startTalk;
-                btnPtt.onmouseup = stopTalk;
-                btnPtt.ontouchstart = startTalk;
-                btnPtt.ontouchend = stopTalk;
+                btnPtt.onpointerdown = async (event) => {{ event.preventDefault(); await startTalk(); }};
+                btnPtt.onpointerup = async (event) => {{ event.preventDefault(); await stopTalk(); }};
             }}
         </script>
     </body>
