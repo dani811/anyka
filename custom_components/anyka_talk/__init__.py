@@ -51,7 +51,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     addon_host = conf.get(CONF_HOST, "localhost")
     addon_port = conf.get(CONF_PORT, DEFAULT_PORT)
     addon_url = f"http://{addon_host}:{addon_port}"
-    session = aiohttp.ClientSession()
+    session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30))
 
     async def handle_start_talk(call: ServiceCall) -> None:
         """Handle start talk service."""
@@ -111,7 +111,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     hass.services.async_register(DOMAIN, SERVICE_START, handle_start_talk, schema=SERVICE_TALK_SCHEMA)
     hass.services.async_register(DOMAIN, SERVICE_STOP, handle_stop_talk)
 
-    async def _close_session(_event):
+    async def _close_session(_):
         await session.close()
 
     hass.bus.async_listen_once("homeassistant_stop", _close_session)

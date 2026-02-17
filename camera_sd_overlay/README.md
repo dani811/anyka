@@ -1,24 +1,24 @@
 # Anyka Camera SD Overlay (TCP Talk 10000)
 
-Este paquete añade un **hook persistente de arranque** para cámaras Anyka mediante SD overlay.
+This package adds a **persistent boot hook** for Anyka cameras using an SD overlay.
 
-## Qué instala
+## What it installs
 
-- `/etc/init.d/S95anyka_talk`: script de inicio que intenta arrancar el servicio de talk en el puerto `10000`.
+- `/etc/init.d/S95anyka_talk`: startup script that attempts to start talk service on port `10000`.
 
-## Instalación
+## Installation
 
-1. Copia `camera_sd_overlay/` a la tarjeta SD de la cámara.
-2. En la cámara, ejecuta:
+1. Copy `camera_sd_overlay/` to the camera SD card.
+2. On the camera, run:
 
 ```sh
 sh /path/to/camera_sd_overlay/install.sh /
 ```
 
-> Si tu firmware monta el overlay en otra ruta, pasa esa ruta como parámetro.
+> If your firmware mounts overlay files under a different root path, pass that path as the parameter.
 
-## Notas
+## Notes
 
-- Puerto por defecto: `10000` (puedes cambiarlo con `ANYKA_TALK_PORT`).
-- El script intenta usar binarios de talk comunes (`ai_talk`, `talk`).
-- Si no encuentra binario compatible, deja trazas en `/tmp/anyka_talk_overlay.log`.
+- Default port: `10000` (override with `ANYKA_TALK_PORT`).
+- The script tries common talk binaries (`ai_talk`, `talk`).
+- If no compatible binary is found, logs are written to `/tmp/anyka_talk_overlay.log`.
