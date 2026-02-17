@@ -1,0 +1,18 @@
+name: Anyka Audio Bridge
+version: "0.1.0"
+slug: anyka_audio_bridge
+description: RTSP downlink + talkback uplink bridge for Anyka cameras using go2rtc.
+startup: services
+boot: auto
+arch:
+  - amd64
+  - aarch64
+ports:
+  1984/tcp: 1984
+  8554/tcp: 8554
+options:
+  camera_rtsp_url: "rtsp://user:password@camera-ip:554/stream1"
+  camera_talkback_url: "rtsp://user:password@camera-ip:554/backchannel"
+schema:
+  camera_rtsp_url: str
+  camera_talkback_url: str?

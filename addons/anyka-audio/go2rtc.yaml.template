@@ -1,0 +1,10 @@
+api:
+  listen: ":1984"
+
+rtsp:
+  listen: ":8554"
+
+streams:
+  anyka:
+    - "__CAMERA_RTSP_URL__"
+    - "ffmpeg:anyka#audio=pcma#input=__CAMERA_TALKBACK_URL__"
