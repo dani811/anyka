@@ -1,6 +1,6 @@
-start:
-  name: Start Two-Way Audio
-  description: Start streaming audio to Anyka camera
+start_talk:
+  name: Start Talk (Uplink)
+  description: Start streaming audio to Anyka camera (microphone -> camera)
   fields:
     camera_ip:
       name: Camera IP
@@ -9,7 +9,57 @@ start:
       example: "192.168.1.100"
       selector:
         text:
+    audio_port:
+      name: Audio Port
+      description: TCP port for audio streaming
+      required: false
+      default: 10000
+      selector:
+        number:
+          min: 1
+          max: 65535
+
+stop_talk:
+  name: Stop Talk
+  description: Stop streaming audio to camera
+
+start_listen:
+  name: Start Listen (Downlink)
+  description: Start receiving audio from Anyka camera via RTSP (camera -> speaker)
+  fields:
+    rtsp_url:
+      name: RTSP URL
+      description: Full RTSP URL of the camera audio stream
+      required: true
+      example: "rtsp://192.168.1.100:554/audio"
+      selector:
+        text:
+
+stop_listen:
+  name: Stop Listen
+  description: Stop receiving audio from camera
+
+start:
+  name: Start (Legacy Alias)
+  description: Alias of start_talk for backward compatibility
+  fields:
+    camera_ip:
+      name: Camera IP
+      description: IP address of the Anyka camera
+      required: true
+      example: "192.168.1.100"
+      selector:
+        text:
+    audio_port:
+      name: Audio Port
+      description: TCP port for audio streaming
+      required: false
+      default: 10000
+      selector:
+        number:
+          min: 1
+          max: 65535
 
 stop:
-  name: Stop Two-Way Audio
-  description: Stop streaming audio to Anyka camera
+  name: Stop (Legacy Alias)
+  description: Alias of stop_talk for backward compatibility

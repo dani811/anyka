@@ -40,12 +40,19 @@
 
 4. **Start** the addon
 
-5. **Add integration** to `configuration.yaml`:
+5. **Install integration from HACS**:
+   - Add this repo as a custom repository in HACS (category: Integration)
+   - Install **Anyka Talk**
+   - Restart Home Assistant
+
+6. **Add integration** to `configuration.yaml`:
    ```yaml
-   anyka_audio:
+   anyka_talk:
+     host: localhost
+     port: 8099
    ```
 
-6. **Restart** Home Assistant
+7. **Restart** Home Assistant
 
 **📖 Detailed: [anyka_audio/README.md](anyka_audio/README.md)**
 
@@ -54,7 +61,7 @@
 **Talk to camera** (uplink):
 
 ```yaml
-service: anyka_audio.start_talk
+service: anyka_talk.start_talk
 data:
   camera_ip: "192.168.1.100"
 ```
@@ -62,7 +69,7 @@ data:
 **Listen from camera** (downlink):
 
 ```yaml
-service: anyka_audio.start_listen
+service: anyka_talk.start_listen
 data:
   rtsp_url: "rtsp://192.168.1.100:554/audio"
 ```
@@ -70,8 +77,8 @@ data:
 **Stop**:
 
 ```yaml
-service: anyka_audio.stop_talk
-service: anyka_audio.stop_listen
+service: anyka_talk.stop_talk
+service: anyka_talk.stop_listen
 ```
 
 ## How It Works
@@ -103,10 +110,14 @@ service: anyka_audio.stop_listen
    - Manages bidirectional audio streams
    - Exposes REST API on port 8099
 
-2. **Home Assistant Integration** (built-in to addon)
-   - Registers 4 services: `start_talk`, `stop_talk`, `start_listen`, `stop_listen`
+2. **Home Assistant Integration** (`custom_components/anyka_talk`)
+   - Registers 4 services under `anyka_talk`: `start_talk`, `stop_talk`, `start_listen`, `stop_listen`
    - Communicates with addon via HTTP API
    - Enables automation and dashboard integration
+
+3. **Anyka SD Overlay Package** (`camera_sd_overlay/`)
+   - Startup hook for camera firmware
+   - Keeps talk TCP port 10000 enabled persistently
 
 ## Documentation
 
@@ -130,11 +141,11 @@ automation:
       to: "on"
     action:
       # Start talk
-      - service: anyka_audio.start_talk
+      - service: anyka_talk.start_talk
         data:
           camera_ip: "192.168.1.100"
       # Start listen
-      - service: anyka_audio.start_listen
+      - service: anyka_talk.start_listen
         data:
           rtsp_url: "rtsp://192.168.1.100:554/audio"
 
@@ -144,8 +155,8 @@ automation:
       entity_id: input_boolean.intercom
       to: "off"
     action:
-      - service: anyka_audio.stop_talk
-      - service: anyka_audio.stop_listen
+      - service: anyka_talk.stop_talk
+      - service: anyka_talk.stop_listen
 ```
 
 ## Requirements

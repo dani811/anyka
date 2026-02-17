@@ -1,0 +1,36 @@
+#!/bin/sh
+# SD overlay startup hook for Anyka cameras.
+
+LOG_FILE="/tmp/anyka_talk_overlay.log"
+TALK_PORT="${ANYKA_TALK_PORT:-10000}"
+
+log() {
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [anyka_talk] $*" >> "${LOG_FILE}"
+}
+
+start_talk_server() {
+  for bin in /usr/bin/ai_talk /usr/sbin/ai_talk /usr/bin/talk /usr/sbin/talk; do
+    if [ -x "${bin}" ]; then
+      if ps | grep -F "${bin}" | grep -F "${TALK_PORT}" >/dev/null 2>&1; then
+        log "Talk server already running (${bin}) on port ${TALK_PORT}"
+        return 0
+      fi
+      "${bin}" "${TALK_PORT}" >/dev/null 2>&1 &
+      log "Started ${bin} on port ${TALK_PORT}"
+      return 0
+    fi
+  done
+
+  log "Talk server binary not found; keeping port ${TALK_PORT} configuration only"
+  return 0
+}
+
+case "${1:-start}" in
+  start|restart)
+    start_talk_server
+    ;;
+  *)
+    ;;
+esac
+
+exit 0
