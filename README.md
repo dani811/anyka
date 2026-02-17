@@ -1,51 +1,77 @@
 # anyka
 
-Minimal Home Assistant + AppDaemon project for Anyka two-way audio communication.
+**Home Assistant addon for bidirectional audio with Anyka IP cameras**
 
-**Enable two-way audio streaming from Home Assistant to your Anyka IP cameras!**
+**🎯 NOW OPERATIONAL: Talk AND Listen to your Anyka cameras!**
 
 ## Features
 
-- 🎤 Stream audio from your microphone to Anyka cameras
-- 🏠 Native Home Assistant integration with services
-- 🚀 Simple setup and configuration
-- 🔧 Minimal dependencies (just ffmpeg and AppDaemon)
-- 🎯 Clean and maintainable codebase
+- 🎤 **Uplink (Talk)**: Stream audio from microphone to camera via TCP
+- 🔊 **Downlink (Listen)**: Receive audio from camera via RTSP to speaker
+- 🔄 **Bidirectional**: Use both simultaneously for true two-way communication
+- 🏠 **HAOS Native**: Runs as a Home Assistant addon (no AppDaemon needed)
+- 🚀 **Simple API**: Easy integration with automations and dashboards
+- 🔧 **Self-contained**: Includes ffmpeg and all dependencies
 
 ## Quick Start
 
 ### Prerequisites
 
-- Home Assistant (2021.12+)
-- AppDaemon add-on installed
-- ffmpeg installed on your system
-- Anyka-based IP camera on your local network
+- Home Assistant OS (Supervisor)
+- Anyka-based IP camera with:
+  - TCP audio input (port 10000)
+  - RTSP audio output
 
-### Installation
+### Installation (HAOS Addon)
 
-**📖 For detailed installation instructions, see [INSTALL.md](INSTALL.md) or [QUICKSTART.md](QUICKSTART.md) for a 5-minute guide**
+1. **Add this repository** to Home Assistant:
+   - Go to **Supervisor** → **Add-on Store** → **⋮** → **Repositories**
+   - Add: `https://github.com/dani811/anyka`
 
-Quick summary:
+2. **Install the addon**:
+   - Find "Anyka Bidirectional Audio"
+   - Click **INSTALL**
 
-1. Copy `custom_components/anyka_talk/` to your Home Assistant config
-2. Copy `appdaemon/apps/anyka_talk.py` and `apps.yaml` to your AppDaemon apps directory
-3. Restart Home Assistant and AppDaemon
-4. Use the services `anyka_talk.start` and `anyka_talk.stop`
+3. **Configure** (optional):
+   ```yaml
+   camera_ip: "192.168.1.100"
+   rtsp_url: "rtsp://192.168.1.100:554/audio"
+   ```
+
+4. **Start** the addon
+
+5. **Add integration** to `configuration.yaml`:
+   ```yaml
+   anyka_audio:
+   ```
+
+6. **Restart** Home Assistant
+
+**📖 Detailed: [anyka_audio/README.md](anyka_audio/README.md)**
 
 ### Basic Usage
 
-Start streaming audio to your camera:
+**Talk to camera** (uplink):
 
 ```yaml
-service: anyka_talk.start
+service: anyka_audio.start_talk
 data:
   camera_ip: "192.168.1.100"
 ```
 
-Stop the audio stream:
+**Listen from camera** (downlink):
 
 ```yaml
-service: anyka_talk.stop
+service: anyka_audio.start_listen
+data:
+  rtsp_url: "rtsp://192.168.1.100:554/audio"
+```
+
+**Stop**:
+
+```yaml
+service: anyka_audio.stop_talk
+service: anyka_audio.stop_listen
 ```
 
 ## How It Works
@@ -53,103 +79,93 @@ service: anyka_talk.stop
 ### Architecture
 
 ```
-┌─────────────────┐      HTTP API       ┌──────────────┐      FFmpeg        ┌─────────┐
-│ Home Assistant  │ ──────────────────> │  AppDaemon   │ ────────────────> │  Camera │
-│   Integration   │    (port 5050)      │    Worker    │  (TCP port 10000) │ (Anyka) │
-└─────────────────┘                     └──────────────┘                    └─────────┘
-        │                                       │
-        │ Services:                             │ Actions:
-        │ - anyka_talk.start                    │ - Capture microphone
-        │ - anyka_talk.stop                     │ - Encode PCM A-law 8kHz mono
-        │                                       │ - Stream via TCP
-        └───────────────────────────────────────┘
+┌─────────────────┐                  ┌────────────────────┐                  ┌─────────┐
+│ Home Assistant  │   HTTP API       │  HAOS Addon        │   Bidirectional  │  Camera │
+│   Integration   │ ───────────────> │  (anyka_audio)     │ <──────────────> │ (Anyka) │
+│                 │   (port 8099)    │                    │                  │         │
+└─────────────────┘                  └────────────────────┘                  └─────────┘
+        │                                       │                                  │
+        │ Services:                             │ Uplink (Talk):                   │
+        │ - start_talk                          │ • FFmpeg: Mic → PCM A-law       │
+        │ - stop_talk                           │ • TCP → Camera:10000 ────────> │
+        │ - start_listen                        │                                  │
+        │ - stop_listen                         │ Downlink (Listen):               │
+        │                                       │ • RTSP ← Camera:554  <────────── │
+        │                                       │ • FFmpeg: RTSP → Speaker         │
+        └───────────────────────────────────────┘                                  
 ```
 
 ### Components
 
-1. **Home Assistant Custom Integration** (`custom_components/anyka_talk/`)
-   - Registers services: `anyka_talk.start` and `anyka_talk.stop`
-   - Communicates with AppDaemon worker via HTTP
+1. **HAOS Addon** (`anyka_audio/`)
+   - Self-contained Docker container
+   - Includes ffmpeg and Python server
+   - Manages bidirectional audio streams
+   - Exposes REST API on port 8099
 
-2. **AppDaemon Worker** (`appdaemon/apps/anyka_talk.py`)
-   - Exposes HTTP API endpoints: `/start`, `/stop`, `/status`
-   - Manages ffmpeg process lifecycle
-   - Captures audio, encodes as PCM A-law (8000Hz, mono), and streams to camera
+2. **Home Assistant Integration** (built-in to addon)
+   - Registers 4 services: `start_talk`, `stop_talk`, `start_listen`, `stop_listen`
+   - Communicates with addon via HTTP API
+   - Enables automation and dashboard integration
 
 ## Documentation
 
-- **[INSTALL.md](INSTALL.md)** - Detailed installation guide with troubleshooting (English)
-- **[INSTALL_ES.md](INSTALL_ES.md)** - Guía de instalación detallada (Español)
-- **[manifest.json](custom_components/anyka_talk/manifest.json)** - Integration metadata
-- **[services.yaml](custom_components/anyka_talk/services.yaml)** - Service definitions
+- **[anyka_audio/README.md](anyka_audio/README.md)** - Complete addon documentation
+- **[INSTALL.md](INSTALL.md)** - Legacy installation guide (v1.0, deprecated)
+- **[INSTALL_ES.md](INSTALL_ES.md)** - Guía de instalación (v1.0, obsoleta)
+- **Legacy files** - See `custom_components/` and `appdaemon/` for v1.0 code
 
 ## Examples
 
-### Dashboard Button
+### Bidirectional Communication
 
-Add a hold-to-talk button to your dashboard:
-
-```yaml
-type: button
-name: Talk to Camera
-tap_action:
-  action: call-service
-  service: anyka_talk.start
-  data:
-    camera_ip: "192.168.1.100"
-hold_action:
-  action: call-service
-  service: anyka_talk.stop
-icon: mdi:microphone
-```
-
-### Automation
-
-Start audio when a button is toggled:
+Talk AND listen simultaneously:
 
 ```yaml
 automation:
-  - alias: "Push-to-Talk"
+  - alias: "Two-Way Intercom"
     trigger:
       platform: state
-      entity_id: input_boolean.camera_talk
+      entity_id: input_boolean.intercom
+      to: "on"
     action:
-      choose:
-        - conditions:
-            - condition: state
-              entity_id: input_boolean.camera_talk
-              state: "on"
-          sequence:
-            - service: anyka_talk.start
-              data:
-                camera_ip: "192.168.1.100"
-        - conditions:
-            - condition: state
-              entity_id: input_boolean.camera_talk
-              state: "off"
-          sequence:
-            - service: anyka_talk.stop
+      # Start talk
+      - service: anyka_audio.start_talk
+        data:
+          camera_ip: "192.168.1.100"
+      # Start listen
+      - service: anyka_audio.start_listen
+        data:
+          rtsp_url: "rtsp://192.168.1.100:554/audio"
+
+  - alias: "Stop Intercom"
+    trigger:
+      platform: state
+      entity_id: input_boolean.intercom
+      to: "off"
+    action:
+      - service: anyka_audio.stop_talk
+      - service: anyka_audio.stop_listen
 ```
 
 ## Requirements
 
 | Component | Version | Notes |
 |-----------|---------|-------|
-| Home Assistant | 2021.12+ | Core or OS |
-| AppDaemon | 4.0.0+ | As add-on or standalone |
-| FFmpeg | Any recent | With ALSA support |
-| Python | 3.8+ | Usually included with HA |
+| Home Assistant | 2021.12+ | OS/Supervised required for addon |
+| Anyka Camera | Any | Must support TCP audio + RTSP |
+| FFmpeg | Included | Built into addon |
 
 ## Troubleshooting
 
 Common issues and solutions:
 
-- **Services not appearing**: Check Home Assistant logs, verify file permissions, restart HA
-- **FFmpeg not found**: Install ffmpeg on your system (see [INSTALL.md](INSTALL.md))
-- **No audio device**: Check `arecord -L`, ensure ALSA is configured
-- **Cannot connect to camera**: Verify IP address and port 10000 accessibility
+- **Services not appearing**: Check addon is running, restart HA
+- **No audio output**: Verify RTSP URL, check addon logs
+- **No audio input**: Verify camera IP and port 10000
+- **Connection failed**: Check network connectivity to camera
 
-For detailed troubleshooting, see [INSTALL.md](INSTALL.md#troubleshooting).
+For detailed troubleshooting, see [anyka_audio/README.md](anyka_audio/README.md#troubleshooting).
 
 ## Contributing
 
