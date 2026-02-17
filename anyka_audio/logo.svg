@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#03A9F4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0277BD;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="200" height="200" rx="20" fill="url(#grad1)"/>
+  
+  <!-- Camera -->
+  <rect x="50" y="70" width="100" height="60" rx="10" fill="white" opacity="0.95"/>
+  <circle cx="120" cy="100" r="20" fill="#0277BD"/>
+  <circle cx="120" cy="100" r="12" fill="#01579B"/>
+  
+  <!-- Microphone (uplink) -->
+  <rect x="30" y="90" width="15" height="25" rx="7.5" fill="#4CAF50"/>
+  <rect x="30" y="118" width="15" height="3" fill="#4CAF50"/>
+  <line x1="37.5" y1="121" x2="37.5" y2="130" stroke="#4CAF50" stroke-width="3"/>
+  <line x1="30" y1="130" x2="45" y2="130" stroke="#4CAF50" stroke-width="3"/>
+  
+  <!-- Speaker (downlink) -->
+  <rect x="155" y="95" width="15" height="10" rx="2" fill="#FF9800"/>
+  <path d="M 170 95 L 180 90 L 180 110 L 170 105 Z" fill="#FF9800"/>
+  <path d="M 183 88 Q 190 100 183 112" stroke="#FF9800" stroke-width="2.5" fill="none"/>
+  <path d="M 186 85 Q 195 100 186 115" stroke="#FF9800" stroke-width="2" fill="none" opacity="0.7"/>
+  
+  <!-- Bidirectional arrows -->
+  <g opacity="0.9">
+    <path d="M 70 40 L 80 30 L 70 20 M 80 30 L 40 30" stroke="white" stroke-width="4" fill="none"/>
+    <path d="M 130 170 L 120 180 L 130 190 M 120 180 L 160 180" stroke="white" stroke-width="4" fill="none"/>
+  </g>
+  
+  <!-- Title -->
+  <text x="100" y="25" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="white" text-anchor="middle">ANYKA</text>
+  <text x="100" y="45" font-family="Arial, sans-serif" font-size="12" fill="white" text-anchor="middle" opacity="0.9">Bidirectional Audio</text>
+</svg>

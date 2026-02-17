@@ -1,0 +1,15 @@
+start:
+  name: Start Two-Way Audio
+  description: Start streaming audio to Anyka camera
+  fields:
+    camera_ip:
+      name: Camera IP
+      description: IP address of the Anyka camera
+      required: true
+      example: "192.168.1.100"
+      selector:
+        text:
+
+stop:
+  name: Stop Two-Way Audio
+  description: Stop streaming audio to Anyka camera

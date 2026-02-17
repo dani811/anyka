@@ -1,0 +1,28 @@
+name: Anyka Bidirectional Audio
+version: "2.0.0"
+slug: anyka_audio
+description: Bidirectional audio for Anyka cameras (talk + listen via RTSP)
+arch:
+  - aarch64
+  - amd64
+  - armhf
+  - armv7
+  - i386
+startup: application
+boot: auto
+init: false
+options:
+  camera_ip: ""
+  rtsp_url: ""
+  audio_port: 10000
+  log_level: info
+schema:
+  camera_ip: str?
+  rtsp_url: str?
+  audio_port: int
+  log_level: list(trace|debug|info|warning|error)
+ports:
+  8099/tcp: 8099
+ports_description:
+  8099/tcp: Web interface and API
+audio: true
