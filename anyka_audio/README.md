@@ -34,15 +34,22 @@ Add this repository to your Home Assistant:
 Configure the addon in the **Configuration** tab:
 
 ```yaml
-camera_ip: "192.168.1.100"
+camera_ip: ""
 rtsp_url: "rtsp://192.168.1.100:554/audio"
 audio_port: 10000
+cameras:
+  - id: "front"
+    ip: "192.168.1.100"
+    talk_port: 10000
+talk_mode: ptt
 log_level: info
 ```
 
 - `camera_ip`: IP address of your Anyka camera (optional, can be set per call)
 - `rtsp_url`: RTSP URL for audio stream from camera (optional, can be set per call)
 - `audio_port`: TCP port for uplink audio (default: 10000)
+- `cameras`: Camera list for multi-camera selection (`id`, `ip`, `talk_port`)
+- `talk_mode`: Browser talk mode (`ptt` or `full`)
 - `log_level`: Logging level (trace, debug, info, warning, error)
 
 ### 4. Start Addon
@@ -174,12 +181,15 @@ icon: mdi:microphone
 The addon exposes a REST API on port 8099:
 
 - `POST /api/uplink/start` - Start talk (mic → camera)
+- `POST /api/uplink/chunk` - Send real-time browser chunk to running talk stream
 - `POST /api/uplink/upload` - Upload audio bytes and stream to camera
 - `POST /api/uplink/stop` - Stop talk
 - `POST /api/downlink/start` - Start listen (camera → speaker)
 - `POST /api/downlink/stop` - Stop listen
 - `GET /api/status` - Get stream status
 - `GET /health` - Health check
+
+For multi-camera setups, select target camera with query param `?cam=<id>` (for example `/ ?cam=front` in web UI or `/api/uplink/start?cam=front`).
 
 ## Troubleshooting
 
@@ -191,7 +201,7 @@ The addon exposes a REST API on port 8099:
 
 ### No Audio Input
 
-1. Check microphone is detected: `arecord -L`
+1. Browser/mobile microphone is required for talk (no ALSA dependency inside HAOS container)
 2. Verify camera IP and port
 3. Check firewall allows TCP to camera port 10000
 

@@ -15,11 +15,18 @@ options:
   camera_ip: ""
   rtsp_url: ""
   audio_port: 10000
+  cameras: []
+  talk_mode: ptt
   log_level: info
 schema:
   camera_ip: str?
   rtsp_url: str?
   audio_port: int
+  cameras:
+    - id: str
+      ip: str
+      talk_port: int?
+  talk_mode: list(ptt|full)
   log_level: list(trace|debug|info|warning|error)
 ports:
   8099/tcp: 8099
