@@ -1,28 +1,28 @@
 #!/usr/bin/env sh
 set -eu
 
-OPTIONS_FILE="/data/options.json"
+options_file="/data/options.json"
 
-if [ ! -f "$OPTIONS_FILE" ]; then
-  echo "Missing $OPTIONS_FILE"
+if [ ! -f "$options_file" ]; then
+  echo "Missing $options_file"
   exit 1
 fi
 
-CAMERA_RTSP_URL="$(jq -r '.camera_rtsp_url // empty' "$OPTIONS_FILE")"
-CAMERA_TALKBACK_URL="$(jq -r '.camera_talkback_url // empty' "$OPTIONS_FILE")"
+camera_rtsp_url="$(jq -r '.camera_rtsp_url // empty' "$options_file")"
+camera_talkback_url="$(jq -r '.camera_talkback_url // empty' "$options_file")"
 
-if [ -z "$CAMERA_RTSP_URL" ]; then
+if [ -z "$camera_rtsp_url" ]; then
   echo "camera_rtsp_url is required"
   exit 1
 fi
 
-if [ -z "$CAMERA_TALKBACK_URL" ]; then
-  CAMERA_TALKBACK_URL="$CAMERA_RTSP_URL"
+if [ -z "$camera_talkback_url" ]; then
+  camera_talkback_url="$camera_rtsp_url"
 fi
 
 sed \
-  -e "s|__CAMERA_RTSP_URL__|$CAMERA_RTSP_URL|g" \
-  -e "s|__CAMERA_TALKBACK_URL__|$CAMERA_TALKBACK_URL|g" \
+  -e "s|__CAMERA_RTSP_URL__|$camera_rtsp_url|g" \
+  -e "s|__CAMERA_TALKBACK_URL__|$camera_talkback_url|g" \
   /etc/go2rtc.yaml.template > /etc/go2rtc.yaml
 
 exec /usr/local/bin/go2rtc -config /etc/go2rtc.yaml
