@@ -1,10 +1,12 @@
 """Device actions for Anyka Talk."""
 from __future__ import annotations
 
+from typing import Any
+
 import voluptuous as vol
 
 from homeassistant.const import CONF_DEVICE_ID, CONF_DOMAIN, CONF_TYPE
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Context, HomeAssistant
 from homeassistant.helpers import config_validation as cv
 
 from . import (
@@ -40,7 +42,13 @@ async def async_validate_action_config(
     hass: HomeAssistant, config: dict
 ) -> dict:
     """Validate device action config."""
-    return ACTION_SCHEMA(config)
+    config = ACTION_SCHEMA(config)
+    action_type = config[CONF_TYPE]
+    if action_type == SERVICE_START_TALK and CONF_CAMERA_IP not in config:
+        raise vol.Invalid("Camera IP is required for start_talk")
+    if action_type == SERVICE_START_LISTEN and CONF_RTSP_URL not in config:
+        raise vol.Invalid("RTSP URL is required for start_listen")
+    return config
 
 
 async def async_get_actions(hass: HomeAssistant, device_id: str) -> list[dict]:
@@ -58,11 +66,11 @@ async def async_get_actions(hass: HomeAssistant, device_id: str) -> list[dict]:
 
 
 async def async_call_action_from_config(
-    hass: HomeAssistant, config: dict, variables: dict, context
+    hass: HomeAssistant, config: dict[str, Any], _variables: dict[str, Any], context: Context
 ) -> None:
     """Execute a configured device action."""
     service = config[CONF_TYPE]
-    data: dict = {}
+    data: dict[str, Any] = {}
 
     if service == SERVICE_START_TALK:
         data[CONF_CAMERA_IP] = config[CONF_CAMERA_IP]
