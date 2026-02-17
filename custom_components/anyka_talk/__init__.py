@@ -1,5 +1,6 @@
 """Anyka Talk Integration for Home Assistant."""
 import logging
+import os
 
 import aiohttp
 import voluptuous as vol
@@ -15,6 +16,8 @@ DEFAULT_PORT = 8099
 CONF_CAMERA_IP = "camera_ip"
 CONF_RTSP_URL = "rtsp_url"
 CONF_AUDIO_PORT = "audio_port"
+CONF_AUDIO_FILE = "audio_file"
+CONF_INPUT_FORMAT = "input_format"
 
 SERVICE_START = "start"
 SERVICE_STOP = "stop"
@@ -22,6 +25,8 @@ SERVICE_START_TALK = "start_talk"
 SERVICE_STOP_TALK = "stop_talk"
 SERVICE_START_LISTEN = "start_listen"
 SERVICE_STOP_LISTEN = "stop_listen"
+SERVICE_UPLOAD_TALK = "upload_talk"
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 SERVICE_TALK_SCHEMA = vol.Schema(
     {
@@ -31,6 +36,14 @@ SERVICE_TALK_SCHEMA = vol.Schema(
 )
 
 SERVICE_LISTEN_SCHEMA = vol.Schema({vol.Required(CONF_RTSP_URL): cv.string})
+SERVICE_UPLOAD_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_CAMERA_IP): cv.string,
+        vol.Required(CONF_AUDIO_FILE): cv.string,
+        vol.Optional(CONF_AUDIO_PORT, default=10000): cv.positive_int,
+        vol.Optional(CONF_INPUT_FORMAT, default="wav"): cv.string,
+    }
+)
 
 CONFIG_SCHEMA = vol.Schema(
     {
@@ -79,6 +92,46 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         except Exception as err:
             _LOGGER.error("Error stopping talk: %s", err)
 
+    async def _read_audio_file(path: str) -> bytes:
+        def _reader() -> bytes:
+            with open(path, "rb") as file_handle:
+                return file_handle.read(MAX_UPLOAD_BYTES + 1)
+
+        return await hass.async_add_executor_job(_reader)
+
+    async def handle_upload_talk(call: ServiceCall) -> None:
+        """Handle upload talk service."""
+        camera_ip = call.data.get(CONF_CAMERA_IP)
+        audio_file = call.data.get(CONF_AUDIO_FILE)
+        audio_port = call.data.get(CONF_AUDIO_PORT, 10000)
+        input_format = call.data.get(CONF_INPUT_FORMAT, "wav")
+
+        try:
+            audio_bytes = await _read_audio_file(audio_file)
+            if len(audio_bytes) > MAX_UPLOAD_BYTES:
+                _LOGGER.error("Audio file too large (max %s bytes): %s", MAX_UPLOAD_BYTES, audio_file)
+                return
+
+            form = aiohttp.FormData()
+            form.add_field(CONF_CAMERA_IP, camera_ip)
+            form.add_field(CONF_AUDIO_PORT, str(audio_port))
+            form.add_field(CONF_INPUT_FORMAT, input_format)
+            form.add_field(
+                "audio",
+                audio_bytes,
+                filename=os.path.basename(audio_file),
+                content_type="application/octet-stream",
+            )
+
+            async with session.post(f"{addon_url}/api/uplink/upload", data=form) as response:
+                if response.status != 200:
+                    result = await response.json()
+                    _LOGGER.error("Failed to upload talk: %s", result.get("error", "Unknown error"))
+        except FileNotFoundError:
+            _LOGGER.error("Audio file not found: %s", audio_file)
+        except Exception as err:
+            _LOGGER.error("Error uploading talk: %s", err)
+
     async def handle_start_listen(call: ServiceCall) -> None:
         """Handle start listen service."""
         rtsp_url = call.data.get(CONF_RTSP_URL)
@@ -106,6 +159,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     hass.services.async_register(DOMAIN, SERVICE_START_TALK, handle_start_talk, schema=SERVICE_TALK_SCHEMA)
     hass.services.async_register(DOMAIN, SERVICE_STOP_TALK, handle_stop_talk)
+    hass.services.async_register(DOMAIN, SERVICE_UPLOAD_TALK, handle_upload_talk, schema=SERVICE_UPLOAD_SCHEMA)
     hass.services.async_register(DOMAIN, SERVICE_START_LISTEN, handle_start_listen, schema=SERVICE_LISTEN_SCHEMA)
     hass.services.async_register(DOMAIN, SERVICE_STOP_LISTEN, handle_stop_listen)
     hass.services.async_register(DOMAIN, SERVICE_START, handle_start_talk, schema=SERVICE_TALK_SCHEMA)

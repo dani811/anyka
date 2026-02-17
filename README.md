@@ -66,6 +66,16 @@ data:
   camera_ip: "192.168.1.100"
 ```
 
+**Talk to camera by UPLOAD** (uplink bytes, no URL/TTS dependency):
+
+```yaml
+service: anyka_talk.upload_talk
+data:
+  camera_ip: "192.168.1.100"
+  audio_file: "/config/www/talk.wav"
+  input_format: "wav"
+```
+
 **Listen from camera** (downlink):
 
 ```yaml
@@ -95,6 +105,7 @@ service: anyka_talk.stop_listen
         │ Actions/Services:                     │ Uplink (Talk):                   │
         │ - start_talk                          │ • FFmpeg: Mic → PCM A-law       │
         │ - stop_talk                           │ • TCP → Camera:10000 ────────> │
+        │ - upload_talk (UPLOAD)                │                                  │
         │ - start_listen                        │                                  │
         │ - stop_listen                         │ Downlink (Listen):               │
         │                                       │ • RTSP ← Camera:554  <────────── │
@@ -111,7 +122,7 @@ service: anyka_talk.stop_listen
    - Exposes REST API on port 8099
 
 2. **Home Assistant Integration** (`custom_components/anyka_talk`)
-   - Registers 4 services (shown as **Actions** in HA 2026 UI) under `anyka_talk`: `start_talk`, `stop_talk`, `start_listen`, `stop_listen`
+   - Registers services (shown as **Actions** in HA 2026 UI) under `anyka_talk`: `start_talk`, `stop_talk`, `upload_talk`, `start_listen`, `stop_listen`
    - Includes Device Actions backed by those same services
    - Communicates with addon via HTTP API
    - Enables automation and dashboard integration

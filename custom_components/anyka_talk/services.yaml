@@ -23,6 +23,41 @@ stop_talk:
   name: Stop Talk
   description: Stop streaming audio to camera
 
+upload_talk:
+  name: Upload Talk (Uplink)
+  description: Upload an audio file to bridge and stream bytes to Anyka camera via TCP
+  fields:
+    camera_ip:
+      name: Camera IP
+      description: IP address of the Anyka camera
+      required: true
+      example: "192.168.1.100"
+      selector:
+        text:
+    audio_file:
+      name: Audio File
+      description: Absolute path to audio file on Home Assistant host (wav recommended)
+      required: true
+      example: "/config/www/talk.wav"
+      selector:
+        text:
+    audio_port:
+      name: Audio Port
+      description: TCP port for audio streaming
+      required: false
+      default: 10000
+      selector:
+        number:
+          min: 1
+          max: 65535
+    input_format:
+      name: Input Format
+      description: FFmpeg input format of uploaded audio file
+      required: false
+      default: wav
+      selector:
+        text:
+
 start_listen:
   name: Start Listen (Downlink)
   description: Start receiving audio from Anyka camera via RTSP (camera -> speaker)

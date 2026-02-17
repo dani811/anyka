@@ -70,6 +70,49 @@ class AudioManager:
             except Exception as e:
                 logger.error(f"Failed to start uplink: {e}")
                 return False, str(e)
+
+    def upload_uplink(self, camera_ip, audio_bytes, audio_port=10000, input_format="wav"):
+        """Upload audio bytes and stream them to camera via TCP."""
+        with self.lock:
+            if self.uplink_process and self.uplink_process.poll() is None:
+                logger.warning("Uplink already running")
+                return False, "Uplink already running"
+
+            cmd = [
+                'ffmpeg',
+                '-hide_banner',
+                '-loglevel', 'error',
+                '-f', input_format,
+                '-i', 'pipe:0',
+                '-ar', '8000',
+                '-ac', '1',
+                '-acodec', 'pcm_alaw',
+                '-f', 'alaw',
+                f'tcp://{camera_ip}:{audio_port}'
+            ]
+
+            try:
+                process = subprocess.Popen(
+                    cmd,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+                _, stderr_data = process.communicate(input=audio_bytes, timeout=60)
+                if process.returncode == 0:
+                    logger.info(f"Uploaded uplink sent to {camera_ip}:{audio_port}")
+                    return True, "Uploaded uplink sent"
+                error_message = stderr_data.decode(errors='ignore').strip() or "ffmpeg failed"
+                logger.error("Upload uplink failed: %s", error_message)
+                return False, error_message
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+                logger.error("Upload uplink timed out")
+                return False, "Upload uplink timed out"
+            except Exception as e:
+                logger.error(f"Failed to upload uplink: {e}")
+                return False, str(e)
     
     def stop_uplink(self):
         """Stop uplink audio stream."""
@@ -186,6 +229,33 @@ def api_stop_uplink():
         return jsonify({'status': 'stopped', 'message': message}), 200
     else:
         return jsonify({'error': message}), 200
+
+
+@app.route('/api/uplink/upload', methods=['POST'])
+def api_upload_uplink():
+    """Upload and stream audio bytes to camera (no URL dependency)."""
+    camera_ip = request.form.get('camera_ip', CAMERA_IP)
+    if not camera_ip:
+        return jsonify({'error': 'camera_ip required'}), 400
+
+    try:
+        audio_port = int(request.form.get('audio_port', AUDIO_PORT))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'audio_port must be an integer'}), 400
+
+    audio_file = request.files.get('audio')
+    if audio_file is None:
+        return jsonify({'error': 'audio file required'}), 400
+
+    audio_bytes = audio_file.read()
+    if not audio_bytes:
+        return jsonify({'error': 'audio file is empty'}), 400
+
+    input_format = request.form.get('input_format', 'wav')
+    success, message = audio_manager.upload_uplink(camera_ip, audio_bytes, audio_port, input_format=input_format)
+    if success:
+        return jsonify({'status': 'uploaded', 'message': message}), 200
+    return jsonify({'error': message}), 500
 
 
 @app.route('/api/downlink/start', methods=['POST'])
