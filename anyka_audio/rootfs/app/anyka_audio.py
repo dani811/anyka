@@ -48,11 +48,14 @@ AUDIO_PORT = _get_env_int('AUDIO_PORT', 10000)
 
 def _load_cameras(raw_value):
     """Load camera map from add-on config."""
-    try:
-        cameras = json.loads(raw_value) if raw_value else []
-    except json.JSONDecodeError:
-        logger.warning("Invalid CAMERAS_JSON, ignoring")
-        return {}
+    if isinstance(raw_value, list):
+        cameras = raw_value
+    else:
+        try:
+            cameras = json.loads(raw_value) if raw_value else []
+        except json.JSONDecodeError:
+            logger.warning("Invalid CAMERAS_JSON, ignoring")
+            return {}
     camera_map = {}
     if isinstance(cameras, list):
         for item in cameras:
@@ -78,6 +81,14 @@ def _load_cameras(raw_value):
 
 
 CAMERAS = _load_cameras(CAMERAS_JSON)
+if not CAMERAS:
+    try:
+        with open('/data/options.json', 'r', encoding='utf-8') as options_file:
+            options = json.load(options_file)
+        CAMERAS = _load_cameras(options.get('cameras', []))
+    except (OSError, ValueError, TypeError) as exc:
+        logger.debug("Could not load cameras from /data/options.json: %s", exc)
+        CAMERAS = {}
 DEFAULT_CAMERA_ID = next(iter(CAMERAS), None)
 
 # Flask app
