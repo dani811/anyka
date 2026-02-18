@@ -14,6 +14,7 @@ DEFAULT_PORT = 8099
 CONF_CAMERA_IP = "camera_ip"
 CONF_RTSP_URL = "rtsp_url"
 CONF_AUDIO_PORT = "audio_port"
+CONF_CAM = "cam"
 
 # Services
 SERVICE_START_TALK = "start_talk"
@@ -21,10 +22,18 @@ SERVICE_STOP_TALK = "stop_talk"
 SERVICE_START_LISTEN = "start_listen"
 SERVICE_STOP_LISTEN = "stop_listen"
 
-SERVICE_TALK_SCHEMA = vol.Schema({
-    vol.Required(CONF_CAMERA_IP): cv.string,
+def _validate_target(data):
+    """Require camera_ip or cam."""
+    if not data.get(CONF_CAMERA_IP) and not data.get(CONF_CAM):
+        raise vol.Invalid("camera_ip or cam is required")
+    return data
+
+
+SERVICE_TALK_SCHEMA = vol.All(vol.Schema({
+    vol.Optional(CONF_CAMERA_IP): cv.string,
+    vol.Optional(CONF_CAM): cv.string,
     vol.Optional(CONF_AUDIO_PORT, default=10000): cv.positive_int,
-})
+}), _validate_target)
 
 SERVICE_LISTEN_SCHEMA = vol.Schema({
     vol.Required(CONF_RTSP_URL): cv.string,
@@ -53,6 +62,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     async def handle_start_talk(call: ServiceCall) -> None:
         """Handle start talk service."""
         camera_ip = call.data.get(CONF_CAMERA_IP)
+        cam_id = call.data.get(CONF_CAM)
         audio_port = call.data.get(CONF_AUDIO_PORT, 10000)
         
         _LOGGER.info("Starting talk to camera %s:%s", camera_ip, audio_port)
@@ -60,7 +70,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         try:
             async with session.post(
                 f"{addon_url}/api/uplink/start",
-                json={"camera_ip": camera_ip, "audio_port": audio_port}
+                json={"camera_ip": camera_ip, "cam": cam_id, "audio_port": audio_port}
             ) as response:
                 if response.status == 200:
                     _LOGGER.info("Talk started successfully")
