@@ -255,6 +255,10 @@ Go to **Addon** → **Log** tab to view detailed logs.
 
 ## Version History
 
+### 2.0.1
+- Enabled Ingress panel UI metadata
+- Embedded webview and command-driven browser talk improvements
+
 ### 2.0.0
 - Complete refactor to HAOS addon
 - Added bidirectional audio support
@@ -264,3 +268,14 @@ Go to **Addon** → **Log** tab to view detailed logs.
 
 ### 1.0.0
 - Initial release (uplink only)
+
+## Maintainer: How Home Assistant detects a new version
+
+To make Home Assistant show an update, publish a **new version number**:
+
+1. Bump addon version in `anyka_audio/config.yaml` (`version` field).
+2. If integration code changed, bump `version` in `anyka_audio/rootfs/app/custom_components/anyka_audio/manifest.json`.
+3. Push the change to the repository branch used by your Add-on repository.
+4. In Home Assistant, refresh Add-on Store / check updates.
+
+Without version bump, Home Assistant treats it as the same release and won't show update availability.
