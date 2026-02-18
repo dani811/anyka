@@ -32,6 +32,7 @@ RTSP_URL = _get_env_str('RTSP_URL', '')
 CAMERAS_JSON = os.getenv('CAMERAS_JSON', '[]')
 DEFAULT_TALK_MODE = "ptt"
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+UPLINK_ALREADY_RUNNING_MSG = "Uplink already running"
 
 
 def _get_env_int(name, default):
@@ -114,7 +115,7 @@ class AudioManager:
         with self.lock:
             if self.uplink_process and self.uplink_process.poll() is None:
                 logger.warning("Uplink already running")
-                return False, "Uplink already running"
+                return False, UPLINK_ALREADY_RUNNING_MSG
             
             # FFmpeg command for uplink (browser/mobile chunks -> camera TCP)
             cmd = [
@@ -161,7 +162,7 @@ class AudioManager:
         with self.lock:
             if self.uplink_process and self.uplink_process.poll() is None:
                 logger.warning("Uplink already running")
-                return False, "Uplink already running"
+                return False, UPLINK_ALREADY_RUNNING_MSG
 
             cmd = [
                 'ffmpeg',
@@ -332,7 +333,7 @@ def api_start_uplink():
     success, message = audio_manager.start_uplink(resolved_ip, resolved_port, input_format=input_format)
     if success:
         return jsonify({'status': 'started', 'message': message, 'camera_ip': resolved_ip, 'audio_port': resolved_port, 'cam': resolved_cam}), 200
-    if message == "Uplink already running":
+    if message == UPLINK_ALREADY_RUNNING_MSG:
         return jsonify({'status': 'running', 'message': message, 'camera_ip': resolved_ip, 'audio_port': resolved_port, 'cam': resolved_cam}), 200
     return jsonify({'error': message}), 500
 
