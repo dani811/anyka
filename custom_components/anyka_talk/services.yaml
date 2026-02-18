@@ -4,9 +4,16 @@ start_talk:
   fields:
     camera_ip:
       name: Camera IP
-      description: IP address of the Anyka camera
-      required: true
+      description: IP address of the Anyka camera (optional if cam is provided)
+      required: false
       example: "192.168.1.100"
+      selector:
+        text:
+    cam:
+      name: Camera ID
+      description: Camera identifier from addon cameras configuration (optional if camera_ip is provided)
+      required: false
+      example: "ANYKA1"
       selector:
         text:
     audio_port:
@@ -29,9 +36,16 @@ upload_talk:
   fields:
     camera_ip:
       name: Camera IP
-      description: IP address of the Anyka camera
-      required: true
+      description: IP address of the Anyka camera (optional if cam is provided)
+      required: false
       example: "192.168.1.100"
+      selector:
+        text:
+    cam:
+      name: Camera ID
+      description: Camera identifier from addon cameras configuration (optional if camera_ip is provided)
+      required: false
+      example: "ANYKA1"
       selector:
         text:
     audio_file:
@@ -80,9 +94,16 @@ start:
   fields:
     camera_ip:
       name: Camera IP
-      description: IP address of the Anyka camera
-      required: true
+      description: IP address of the Anyka camera (optional if cam is provided)
+      required: false
       example: "192.168.1.100"
+      selector:
+        text:
+    cam:
+      name: Camera ID
+      description: Camera identifier from addon cameras configuration (optional if camera_ip is provided)
+      required: false
+      example: "ANYKA1"
       selector:
         text:
     audio_port:

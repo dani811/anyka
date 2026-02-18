@@ -16,6 +16,7 @@ DEFAULT_PORT = 8099
 CONF_CAMERA_IP = "camera_ip"
 CONF_RTSP_URL = "rtsp_url"
 CONF_AUDIO_PORT = "audio_port"
+CONF_CAM = "cam"
 CONF_AUDIO_FILE = "audio_file"
 CONF_INPUT_FORMAT = "input_format"
 
@@ -28,21 +29,36 @@ SERVICE_STOP_LISTEN = "stop_listen"
 SERVICE_UPLOAD_TALK = "upload_talk"
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
-SERVICE_TALK_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_CAMERA_IP): cv.string,
-        vol.Optional(CONF_AUDIO_PORT, default=10000): cv.positive_int,
-    }
+def _validate_target(data):
+    """Require camera_ip or cam."""
+    if not data.get(CONF_CAMERA_IP) and not data.get(CONF_CAM):
+        raise vol.Invalid("camera_ip or cam is required")
+    return data
+
+
+SERVICE_TALK_SCHEMA = vol.All(
+    vol.Schema(
+        {
+            vol.Optional(CONF_CAMERA_IP): cv.string,
+            vol.Optional(CONF_CAM): cv.string,
+            vol.Optional(CONF_AUDIO_PORT, default=10000): cv.positive_int,
+        }
+    ),
+    _validate_target,
 )
 
 SERVICE_LISTEN_SCHEMA = vol.Schema({vol.Required(CONF_RTSP_URL): cv.string})
-SERVICE_UPLOAD_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_CAMERA_IP): cv.string,
-        vol.Required(CONF_AUDIO_FILE): cv.string,
-        vol.Optional(CONF_AUDIO_PORT, default=10000): cv.positive_int,
-        vol.Optional(CONF_INPUT_FORMAT, default="wav"): cv.string,
-    }
+SERVICE_UPLOAD_SCHEMA = vol.All(
+    vol.Schema(
+        {
+            vol.Optional(CONF_CAMERA_IP): cv.string,
+            vol.Optional(CONF_CAM): cv.string,
+            vol.Required(CONF_AUDIO_FILE): cv.string,
+            vol.Optional(CONF_AUDIO_PORT, default=10000): cv.positive_int,
+            vol.Optional(CONF_INPUT_FORMAT, default="wav"): cv.string,
+        }
+    ),
+    _validate_target,
 )
 
 CONFIG_SCHEMA = vol.Schema(
@@ -69,12 +85,13 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     async def handle_start_talk(call: ServiceCall) -> None:
         """Handle start talk service."""
         camera_ip = call.data.get(CONF_CAMERA_IP)
+        cam_id = call.data.get(CONF_CAM)
         audio_port = call.data.get(CONF_AUDIO_PORT, 10000)
 
         try:
             async with session.post(
                 f"{addon_url}/api/uplink/start",
-                json={CONF_CAMERA_IP: camera_ip, CONF_AUDIO_PORT: audio_port},
+                json={CONF_CAMERA_IP: camera_ip, CONF_CAM: cam_id, CONF_AUDIO_PORT: audio_port},
             ) as response:
                 if response.status != 200:
                     result = await response.json()
@@ -103,6 +120,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     async def handle_upload_talk(call: ServiceCall) -> None:
         """Handle upload talk service."""
         camera_ip = call.data.get(CONF_CAMERA_IP)
+        cam_id = call.data.get(CONF_CAM)
         audio_file = call.data.get(CONF_AUDIO_FILE)
         audio_port = call.data.get(CONF_AUDIO_PORT, 10000)
         input_format = call.data.get(CONF_INPUT_FORMAT, "wav")
@@ -114,7 +132,10 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
                 return
 
             form = aiohttp.FormData()
-            form.add_field(CONF_CAMERA_IP, camera_ip)
+            if camera_ip:
+                form.add_field(CONF_CAMERA_IP, camera_ip)
+            if cam_id:
+                form.add_field(CONF_CAM, cam_id)
             form.add_field(CONF_AUDIO_PORT, str(audio_port))
             form.add_field(CONF_INPUT_FORMAT, input_format)
             form.add_field(

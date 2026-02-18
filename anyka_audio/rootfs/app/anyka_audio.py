@@ -21,10 +21,21 @@ logger = logging.getLogger(__name__)
 # Configuration from environment
 CAMERA_IP = os.getenv('CAMERA_IP', '')
 RTSP_URL = os.getenv('RTSP_URL', '')
-AUDIO_PORT = int(os.getenv('AUDIO_PORT', '10000'))
 CAMERAS_JSON = os.getenv('CAMERAS_JSON', '[]')
 TALK_MODE = os.getenv('TALK_MODE', 'ptt').lower()
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+
+
+def _get_env_int(name, default):
+    """Read integer env var with safe fallback."""
+    raw = os.getenv(name)
+    try:
+        return int(raw) if raw not in (None, "", "null") else int(default)
+    except (TypeError, ValueError):
+        return int(default)
+
+
+AUDIO_PORT = _get_env_int('AUDIO_PORT', 10000)
 
 
 def _load_cameras(raw_value):
@@ -265,6 +276,8 @@ def resolve_camera_target(cam_id=None, camera_ip=None, audio_port=None):
     if cam_id and cam_id in CAMERAS:
         cam = CAMERAS[cam_id]
         return cam['ip'], int(cam.get('talk_port', AUDIO_PORT)), cam_id
+    if cam_id:
+        return None, None, None
     if CAMERA_IP:
         return CAMERA_IP, int(audio_port or AUDIO_PORT), None
     if DEFAULT_CAMERA_ID:
@@ -289,6 +302,8 @@ def api_start_uplink():
             return jsonify({'error': 'audio_port must be an integer'}), 400
 
     resolved_ip, resolved_port, resolved_cam = resolve_camera_target(cam_id=cam_id, camera_ip=camera_ip, audio_port=audio_port)
+    if cam_id and not camera_ip and resolved_ip is None:
+        return jsonify({'error': f'unknown camera id: {cam_id}'}), 400
     if not resolved_ip:
         return jsonify({'error': 'camera_ip required (or configure cameras + cam)'}), 400
 
@@ -322,6 +337,8 @@ def api_upload_uplink():
         return jsonify({'error': 'audio_port must be an integer'}), 400
 
     resolved_ip, resolved_port, resolved_cam = resolve_camera_target(cam_id=cam_id, camera_ip=camera_ip, audio_port=audio_port)
+    if cam_id and not camera_ip and resolved_ip is None:
+        return jsonify({'error': f'unknown camera id: {cam_id}'}), 400
     if not resolved_ip:
         return jsonify({'error': 'camera_ip required (or configure cameras + cam)'}), 400
 
