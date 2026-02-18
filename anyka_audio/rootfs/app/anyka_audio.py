@@ -461,6 +461,8 @@ def _render_talk_page(embedded=False):
             const embedded = {embedded_json};
             const params = new URLSearchParams(window.location.search);
             const camFromQuery = params.get("cam");
+            const ingressMatch = window.location.pathname.match(new RegExp("^/api/hassio_ingress/[^/]+"));
+            const apiBasePath = ingressMatch ? ingressMatch[0] : "";
             const allowedOriginRaw = params.get("parent_origin");
             let allowedOrigin = "";
             if (allowedOriginRaw) {{
@@ -514,14 +516,14 @@ def _render_talk_page(embedded=False):
                 if (running) return;
                 const cam = cameraSelect.value || "";
                 try {{
-                    const startRes = await fetch(`/api/uplink/start?cam=${{encodeURIComponent(cam)}}`, {{ method: "POST", headers: {{ "Content-Type": "application/json" }}, body: JSON.stringify({{ input_format: "webm", cam }}) }});
+                    const startRes = await fetch(`${{apiBasePath}}/api/uplink/start?cam=${{encodeURIComponent(cam)}}`, {{ method: "POST", headers: {{ "Content-Type": "application/json" }}, body: JSON.stringify({{ input_format: "webm", cam }}) }});
                     const startData = await startRes.json().catch(() => ({{}}));
                     if (!startRes.ok) throw new Error(startData.error || "failed to start uplink");
                     stream = await navigator.mediaDevices.getUserMedia({{ audio: true }});
                     recorder = new MediaRecorder(stream, {{ mimeType: "audio/webm" }});
                     recorder.ondataavailable = async (event) => {{
                         if (!event.data || !event.data.size) return;
-                        const chunkRes = await fetch(`/api/uplink/chunk?cam=${{encodeURIComponent(cam)}}`, {{ method: "POST", body: await event.data.arrayBuffer() }});
+                        const chunkRes = await fetch(`${{apiBasePath}}/api/uplink/chunk?cam=${{encodeURIComponent(cam)}}`, {{ method: "POST", body: await event.data.arrayBuffer() }});
                         if (!chunkRes.ok) statusEl.textContent = `chunk upload failed: ${{chunkRes.status}}`;
                     }};
                     recorder.start(250);
@@ -536,7 +538,7 @@ def _render_talk_page(embedded=False):
             async function stopTalk() {{
                 if (recorder) recorder.stop();
                 if (stream) stream.getTracks().forEach((t) => t.stop());
-                const stopRes = await fetch("/api/uplink/stop", {{ method: "POST" }});
+                const stopRes = await fetch(`${{apiBasePath}}/api/uplink/stop`, {{ method: "POST" }});
                 const stopData = await stopRes.json().catch(() => ({{}}));
                 if (!stopRes.ok) statusEl.textContent = `stop failed: ${{stopData.error || "unknown"}}`;
                 recorder = null;
