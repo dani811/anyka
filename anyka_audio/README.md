@@ -46,10 +46,10 @@ talk_mode: ptt
 log_level: info
 ```
 
-- `camera_ip`: IP address of your Anyka camera (optional, can be set per call)
-- `rtsp_url`: RTSP URL for audio stream from camera (optional, can be set per call)
-- `audio_port`: TCP port for uplink audio (default: 10000)
-- `cameras`: Camera list for multi-camera selection (`id`, `ip`, `talk_port`)
+- `camera_ip`: Default IP for single-camera/fallback mode (optional, can be set per call)
+- `rtsp_url`: Default RTSP URL for single-camera/fallback mode (optional, can be set per call)
+- `audio_port`: Default TCP uplink port for single-camera/fallback mode (default: 10000)
+- `cameras`: Multi-camera list used when selecting by `cam` (`id`, `ip`, `talk_port`)
 - `talk_mode`: Browser talk mode (`ptt` or `full`)
 - `log_level`: Logging level (trace, debug, info, warning, error)
 
