@@ -25,7 +25,7 @@ options:
 schema:
   camera_ip: str?
   rtsp_url: str?
-  audio_port: int
+  audio_port: int?
   cameras:
     - id: str
       ip: str
