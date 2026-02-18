@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.5] - 2026-02-18
+
+### Changed
+- Add-on version bump to `2.0.5` for Home Assistant update detection
+- Internal add-on integration manifest version bump to `2.0.5`
+
 ## [2.0.4] - 2026-02-18
 
 ### Changed
