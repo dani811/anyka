@@ -33,6 +33,7 @@ CAMERAS_JSON = os.getenv('CAMERAS_JSON', '[]')
 DEFAULT_TALK_MODE = "ptt"
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 UPLINK_ALREADY_RUNNING_MSG = "Uplink already running"
+UPLINK_DIFFERENT_CAMERA_MSG = "Uplink running for different camera"
 
 
 def _get_env_int(name, default):
@@ -108,9 +109,10 @@ class AudioManager:
     def __init__(self):
         self.uplink_process = None
         self.downlink_process = None
+        self.uplink_cam = None
         self.lock = threading.Lock()
     
-    def start_uplink(self, camera_ip, audio_port=10000, input_format="webm"):
+    def start_uplink(self, camera_ip, audio_port=10000, input_format="webm", cam_id=None):
         """Start uplink stream from uploaded browser/mobile chunks."""
         with self.lock:
             if self.uplink_process and self.uplink_process.poll() is None:
@@ -138,17 +140,20 @@ class AudioManager:
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE
                 )
+                self.uplink_cam = cam_id
                 logger.info(f"Uplink started to {camera_ip}:{audio_port} format={input_format} (PID: {self.uplink_process.pid})")
                 return True, "Uplink started"
             except Exception as e:
                 logger.error(f"Failed to start uplink: {e}")
                 return False, str(e)
 
-    def feed_uplink(self, audio_bytes):
+    def feed_uplink(self, audio_bytes, cam_id=None):
         """Feed chunk to running uplink process."""
         with self.lock:
             if not self.uplink_process or self.uplink_process.poll() is not None:
                 return False, "Uplink not running"
+            if cam_id and self.uplink_cam and cam_id != self.uplink_cam:
+                return False, UPLINK_DIFFERENT_CAMERA_MSG
             try:
                 self.uplink_process.stdin.write(audio_bytes)
                 self.uplink_process.stdin.flush()
@@ -201,12 +206,14 @@ class AudioManager:
                 logger.error(f"Failed to upload uplink: {e}")
                 return False, str(e)
     
-    def stop_uplink(self):
+    def stop_uplink(self, cam_id=None):
         """Stop uplink audio stream."""
         with self.lock:
             if not self.uplink_process or self.uplink_process.poll() is not None:
                 logger.info("No uplink running")
                 return False, "No uplink running"
+            if cam_id and self.uplink_cam and cam_id != self.uplink_cam:
+                return False, UPLINK_DIFFERENT_CAMERA_MSG
             
             try:
                 if self.uplink_process.stdin:
@@ -215,12 +222,14 @@ class AudioManager:
                 self.uplink_process.wait(timeout=5)
                 logger.info("Uplink stopped")
                 self.uplink_process = None
+                self.uplink_cam = None
                 return True, "Uplink stopped"
             except subprocess.TimeoutExpired:
                 logger.warning("Uplink didn't terminate, killing")
                 self.uplink_process.kill()
                 self.uplink_process.wait()
                 self.uplink_process = None
+                self.uplink_cam = None
                 return True, "Uplink killed"
             except Exception as e:
                 logger.error(f"Failed to stop uplink: {e}")
@@ -284,7 +293,8 @@ class AudioManager:
         with self.lock:
             return {
                 'uplink': 'running' if self.uplink_process and self.uplink_process.poll() is None else 'stopped',
-                'downlink': 'running' if self.downlink_process and self.downlink_process.poll() is None else 'stopped'
+                'downlink': 'running' if self.downlink_process and self.downlink_process.poll() is None else 'stopped',
+                'uplink_cam': self.uplink_cam
             }
 
 
@@ -330,7 +340,8 @@ def api_start_uplink():
     if not resolved_ip:
         return jsonify({'error': 'camera_ip required (or configure cameras + cam)'}), 400
 
-    success, message = audio_manager.start_uplink(resolved_ip, resolved_port, input_format=input_format)
+    active_cam = resolved_cam or cam_id
+    success, message = audio_manager.start_uplink(resolved_ip, resolved_port, input_format=input_format, cam_id=active_cam)
     if success:
         return jsonify({'status': 'started', 'message': message, 'camera_ip': resolved_ip, 'audio_port': resolved_port, 'cam': resolved_cam}), 200
     if message == UPLINK_ALREADY_RUNNING_MSG:
@@ -341,11 +352,14 @@ def api_start_uplink():
 @app.route('/api/uplink/stop', methods=['POST'])
 def api_stop_uplink():
     """Stop uplink."""
-    success, message = audio_manager.stop_uplink()
+    data = request.get_json(silent=True) or {}
+    cam_id = data.get('cam') or request.args.get('cam')
+    success, message = audio_manager.stop_uplink(cam_id=cam_id)
     if success:
         return jsonify({'status': 'stopped', 'message': message}), 200
-    else:
-        return jsonify({'error': message}), 200
+    if message == UPLINK_DIFFERENT_CAMERA_MSG:
+        return jsonify({'error': message}), 409
+    return jsonify({'error': message}), 200
 
 
 @app.route('/api/uplink/upload', methods=['POST'])
@@ -386,10 +400,11 @@ def api_upload_uplink():
 @app.route('/api/uplink/chunk', methods=['POST'])
 def api_uplink_chunk():
     """Send real-time chunk to running uplink process."""
+    cam_id = request.args.get('cam')
     audio_bytes = request.get_data(cache=False, as_text=False)
     if not audio_bytes:
         return jsonify({'error': 'audio chunk required'}), 400
-    success, message = audio_manager.feed_uplink(audio_bytes)
+    success, message = audio_manager.feed_uplink(audio_bytes, cam_id=cam_id)
     if success:
         return jsonify({'status': 'ok', 'message': message}), 200
     return jsonify({'error': message}), 409
@@ -483,6 +498,7 @@ def _render_talk_page(embedded=False):
             let recorder = null;
             let stream = null;
             let running = false;
+            let opInFlight = false;
 
             const selected = camFromQuery || defaultCam || (Array.isArray(cameras) && cameras.length > 0 ? cameras[0].id : "");
             cameras.forEach((cam) => {{
@@ -515,12 +531,15 @@ def _render_talk_page(embedded=False):
             cameraSelect.onchange = () => applyTalkModeUi();
 
             async function startTalk() {{
-                if (running) return;
+                if (running || opInFlight) return;
                 const cam = cameraSelect.value || "";
+                let startedRemote = false;
+                opInFlight = true;
                 try {{
                     const startRes = await fetch(`${{apiBasePath}}/api/uplink/start?cam=${{encodeURIComponent(cam)}}`, {{ method: "POST", headers: {{ "Content-Type": "application/json" }}, body: JSON.stringify({{ input_format: "webm", cam }}) }});
                     const startData = await startRes.json().catch(() => ({{}}));
                     if (!startRes.ok) throw new Error(startData.error || "failed to start uplink");
+                    startedRemote = true;
                     stream = await navigator.mediaDevices.getUserMedia({{ audio: true }});
                     recorder = new MediaRecorder(stream, {{ mimeType: "audio/webm" }});
                     recorder.ondataavailable = async (event) => {{
@@ -533,25 +552,47 @@ def _render_talk_page(embedded=False):
                     statusEl.textContent = `talking to cam=${{cam}}`;
                 }} catch (error) {{
                     statusEl.textContent = `start failed: ${{error.message}}`;
-                    await stopTalk();
+                    if (recorder && recorder.state !== "inactive") {{
+                        try {{ recorder.stop(); }} catch (_error) {{}}
+                    }}
+                    if (stream) stream.getTracks().forEach((t) => t.stop());
+                    recorder = null;
+                    stream = null;
+                    running = false;
+                    if (startedRemote) {{
+                        await fetch(`${{apiBasePath}}/api/uplink/stop?cam=${{encodeURIComponent(cam)}}`, {{ method: "POST" }});
+                    }}
+                }} finally {{
+                    opInFlight = false;
                 }}
             }}
 
             async function stopTalk() {{
-                if (recorder) recorder.stop();
-                if (stream) stream.getTracks().forEach((t) => t.stop());
-                const stopRes = await fetch(`${{apiBasePath}}/api/uplink/stop`, {{ method: "POST" }});
-                const stopData = await stopRes.json().catch(() => ({{}}));
-                if (!stopRes.ok) statusEl.textContent = `stop failed: ${{stopData.error || "unknown"}}`;
-                recorder = null;
-                stream = null;
-                running = false;
-                if (stopRes.ok) statusEl.textContent = "stopped";
+                if (opInFlight) return;
+                opInFlight = true;
+                try {{
+                    if (recorder && recorder.state !== "inactive") {{
+                        try {{ recorder.stop(); }} catch (_error) {{}}
+                    }}
+                    if (stream) stream.getTracks().forEach((t) => t.stop());
+                    const cam = cameraSelect.value || "";
+                    const stopRes = await fetch(`${{apiBasePath}}/api/uplink/stop?cam=${{encodeURIComponent(cam)}}`, {{ method: "POST" }});
+                    const stopData = await stopRes.json().catch(() => ({{}}));
+                    if (!stopRes.ok) statusEl.textContent = `stop failed: ${{stopData.error || "unknown"}}`;
+                    recorder = null;
+                    stream = null;
+                    running = false;
+                    if (stopRes.ok) statusEl.textContent = "stopped";
+                }} finally {{
+                    opInFlight = false;
+                }}
             }}
 
             btnToggle.onclick = async () => {{ if (running) await stopTalk(); else await startTalk(); }};
             btnPtt.onpointerdown = async (event) => {{ event.preventDefault(); await startTalk(); }};
             btnPtt.onpointerup = async (event) => {{ event.preventDefault(); await stopTalk(); }};
+            btnPtt.onpointercancel = async (event) => {{ event.preventDefault(); await stopTalk(); }};
+            btnPtt.onpointerleave = async (event) => {{ if (running) {{ event.preventDefault(); await stopTalk(); }} }};
             applyTalkModeUi();
 
             window.addEventListener("message", async (event) => {{
