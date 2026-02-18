@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Simplified addon configuration to use `cameras` as the primary camera list (supports one or many cameras)
 - Added optional per-camera `talk_mode` (`ptt` / `full`) in addon camera configuration
+- Camera loading now falls back to `/data/options.json` when environment camera list is empty (aligned with Home Assistant addon options storage)
 - Add-on version bump to `2.0.3` for Home Assistant update detection
 - Internal add-on integration manifest version bump to `2.0.3`
 

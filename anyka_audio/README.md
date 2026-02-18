@@ -50,6 +50,8 @@ If `talk_mode` is omitted in a camera, it defaults to `ptt`.
 
 `camera_ip`, `rtsp_url` and `audio_port` remain available per API/service call when needed, but are no longer required as addon-level options.
 
+At runtime, camera config is read from the add-on options (`cameras`) and also falls back to `/data/options.json` when needed, matching Home Assistant add-on option storage behavior.
+
 ### 4. Start Addon
 
 1. Go to the **Info** tab
