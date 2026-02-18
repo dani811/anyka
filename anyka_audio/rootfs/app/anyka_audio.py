@@ -19,10 +19,18 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration from environment
-CAMERA_IP = os.getenv('CAMERA_IP', '')
-RTSP_URL = os.getenv('RTSP_URL', '')
+def _get_env_str(name, default=''):
+    """Read string env var with null-safe fallback."""
+    raw = os.getenv(name)
+    if raw in (None, "", "null", "None"):
+        return default
+    return str(raw)
+
+
+CAMERA_IP = _get_env_str('CAMERA_IP', '')
+RTSP_URL = _get_env_str('RTSP_URL', '')
 CAMERAS_JSON = os.getenv('CAMERAS_JSON', '[]')
-TALK_MODE = os.getenv('TALK_MODE', 'ptt').lower()
+DEFAULT_TALK_MODE = "ptt"
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 
@@ -62,7 +70,10 @@ def _load_cameras(raw_value):
                 talk_port = int(talk_port)
             except (TypeError, ValueError):
                 talk_port = AUDIO_PORT
-            camera_map[cam_id] = {'id': cam_id, 'ip': cam_ip, 'talk_port': talk_port}
+            talk_mode = str(item.get('talk_mode', DEFAULT_TALK_MODE)).strip().lower()
+            if talk_mode not in ("ptt", "full"):
+                talk_mode = DEFAULT_TALK_MODE
+            camera_map[cam_id] = {'id': cam_id, 'ip': cam_ip, 'talk_port': talk_port, 'talk_mode': talk_mode}
     return camera_map
 
 
@@ -401,7 +412,7 @@ def api_stop_downlink():
 def api_status():
     """Get status of audio streams."""
     status = audio_manager.get_status()
-    status['talk_mode'] = TALK_MODE
+    status['default_talk_mode'] = DEFAULT_TALK_MODE
     status['default_camera'] = DEFAULT_CAMERA_ID
     status['cameras'] = list(CAMERAS.values())
     return jsonify(status), 200
@@ -417,7 +428,9 @@ def _render_talk_page(embedded=False):
     """Render browser/mobile talk page."""
     cameras_json = json.dumps(list(CAMERAS.values()))
     default_cam_json = json.dumps(DEFAULT_CAMERA_ID or "")
-    talk_mode_json = json.dumps(TALK_MODE if TALK_MODE in ("ptt", "full") else "ptt")
+    default_talk_mode = DEFAULT_TALK_MODE
+    if DEFAULT_CAMERA_ID and DEFAULT_CAMERA_ID in CAMERAS:
+        default_talk_mode = CAMERAS[DEFAULT_CAMERA_ID].get('talk_mode', DEFAULT_TALK_MODE)
     embedded_json = json.dumps(bool(embedded))
     body_margin = "8px" if embedded else "20px"
     return f"""
@@ -425,7 +438,7 @@ def _render_talk_page(embedded=False):
     <head><title>Anyka Bidirectional Audio</title></head>
     <body style="font-family: sans-serif; margin: {body_margin};">
         {'<h1>Anyka Bidirectional Audio Addon</h1>' if not embedded else ''}
-        <p><strong>Talk mode:</strong> {TALK_MODE.upper()}</p>
+        <p><strong>Talk mode:</strong> <span id="talk-mode-label">{default_talk_mode.upper()}</span></p>
         <label for="camera">Camera:</label>
         <select id="camera"></select>
         <button id="ptt">Hold to Talk</button>
@@ -434,7 +447,6 @@ def _render_talk_page(embedded=False):
         <script>
             const cameras = {cameras_json};
             const defaultCam = {default_cam_json};
-            const talkMode = {talk_mode_json};
             const embedded = {embedded_json};
             const params = new URLSearchParams(window.location.search);
             const camFromQuery = params.get("cam");
@@ -452,6 +464,7 @@ def _render_talk_page(embedded=False):
             const statusEl = document.getElementById("status");
             const btnPtt = document.getElementById("ptt");
             const btnToggle = document.getElementById("toggle");
+            const talkModeLabel = document.getElementById("talk-mode-label");
             let recorder = null;
             let stream = null;
             let running = false;
@@ -466,6 +479,25 @@ def _render_talk_page(embedded=False):
             }});
             statusEl.textContent = embedded ? "ready (embedded webview)" : "ready";
             if (embedded && !allowedOrigin) statusEl.textContent = "ready (commands disabled: set parent_origin)";
+            function getCurrentTalkMode() {{
+                const cam = cameras.find((item) => item.id === cameraSelect.value);
+                const mode = (cam && (cam.talk_mode === "full" || cam.talk_mode === "ptt")) ? cam.talk_mode : "ptt";
+                return mode === "full" ? "full" : "ptt";
+            }}
+
+            function applyTalkModeUi() {{
+                const mode = getCurrentTalkMode();
+                talkModeLabel.textContent = mode.toUpperCase();
+                if (mode === "full") {{
+                    btnPtt.style.display = "none";
+                    btnToggle.style.display = "";
+                }} else {{
+                    btnToggle.style.display = "none";
+                    btnPtt.style.display = "";
+                }}
+            }}
+
+            cameraSelect.onchange = () => applyTalkModeUi();
 
             async function startTalk() {{
                 if (running) return;
@@ -502,14 +534,10 @@ def _render_talk_page(embedded=False):
                 if (stopRes.ok) statusEl.textContent = "stopped";
             }}
 
-            if (talkMode === "full") {{
-                btnPtt.style.display = "none";
-                btnToggle.onclick = async () => {{ if (running) await stopTalk(); else await startTalk(); }};
-            }} else {{
-                btnToggle.style.display = "none";
-                btnPtt.onpointerdown = async (event) => {{ event.preventDefault(); await startTalk(); }};
-                btnPtt.onpointerup = async (event) => {{ event.preventDefault(); await stopTalk(); }};
-            }}
+            btnToggle.onclick = async () => {{ if (running) await stopTalk(); else await startTalk(); }};
+            btnPtt.onpointerdown = async (event) => {{ event.preventDefault(); await startTalk(); }};
+            btnPtt.onpointerup = async (event) => {{ event.preventDefault(); await stopTalk(); }};
+            applyTalkModeUi();
 
             window.addEventListener("message", async (event) => {{
                 if (!embedded) return;
@@ -545,7 +573,7 @@ if __name__ == '__main__':
     logger.info(f"Camera IP: {CAMERA_IP}")
     logger.info(f"RTSP URL: {RTSP_URL}")
     logger.info(f"Audio Port: {AUDIO_PORT}")
-    logger.info(f"Talk mode: {TALK_MODE}")
+    logger.info(f"Default talk mode: {DEFAULT_TALK_MODE}")
     logger.info("Configured cameras: %s", ",".join(CAMERAS.keys()) if CAMERAS else "none")
     
     # Start Flask server

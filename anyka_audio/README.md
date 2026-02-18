@@ -35,23 +35,20 @@ Add this repository to your Home Assistant:
 Configure the addon in the **Configuration** tab:
 
 ```yaml
-camera_ip: ""
-rtsp_url: "rtsp://192.168.1.100:554/audio"
-audio_port: 10000
 cameras:
   - id: "front"
     ip: "192.168.1.100"
     talk_port: 10000
-talk_mode: ptt
+    talk_mode: ptt
 log_level: info
 ```
 
-- `camera_ip`: IP address of your Anyka camera (optional, can be set per call)
-- `rtsp_url`: RTSP URL for audio stream from camera (optional, can be set per call)
-- `audio_port`: TCP port for uplink audio (default: 10000)
-- `cameras`: Camera list for multi-camera selection (`id`, `ip`, `talk_port`)
-- `talk_mode`: Browser talk mode (`ptt` or `full`)
+- `cameras`: Camera list (use 1 item for single camera, multiple items for multi-camera) (`id`, `ip`, `talk_port`, `talk_mode`)
 - `log_level`: Logging level (trace, debug, info, warning, error)
+
+If `talk_mode` is omitted in a camera, it defaults to `ptt`.
+
+`camera_ip`, `rtsp_url` and `audio_port` remain available per API/service call when needed, but are no longer required as addon-level options.
 
 ### 4. Start Addon
 
@@ -254,6 +251,10 @@ Go to **Addon** → **Log** tab to view detailed logs.
 - Discussions: https://github.com/dani811/anyka/discussions
 
 ## Version History
+
+### 2.0.3
+- Simplified addon configuration to use `cameras` for one or many cameras
+- Added optional `talk_mode` per camera (`ptt`/`full`)
 
 ### 2.0.2
 - Multi-camera config no longer requires root `audio_port`
