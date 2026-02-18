@@ -254,6 +254,9 @@ Go to **Addon** → **Log** tab to view detailed logs.
 
 ## Version History
 
+### 2.0.4
+- Version bump for Home Assistant update detection
+
 ### 2.0.3
 - Simplified addon configuration to use `cameras` for one or many cameras
 - Added optional `talk_mode` per camera (`ptt`/`full`)
