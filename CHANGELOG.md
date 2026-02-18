@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.3] - 2026-02-18
+
+### Changed
+- Simplified addon configuration to use `cameras` as the primary camera list (supports one or many cameras)
+- Added optional per-camera `talk_mode` (`ptt` / `full`) in addon camera configuration
+- Add-on version bump to `2.0.3` for Home Assistant update detection
+- Internal add-on integration manifest version bump to `2.0.3`
+
 ## [2.0.2] - 2026-02-18
 
 ### Changed
