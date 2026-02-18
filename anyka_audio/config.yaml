@@ -16,16 +16,10 @@ ingress_port: 8099
 panel_icon: mdi:microphone-message
 panel_title: Anyka Audio
 options:
-  camera_ip: ""
-  rtsp_url: ""
-  audio_port: 10000
   cameras: []
   talk_mode: ptt
   log_level: info
 schema:
-  camera_ip: str?
-  rtsp_url: str?
-  audio_port: int?
   cameras:
     - id: str
       ip: str

@@ -35,9 +35,6 @@ Add this repository to your Home Assistant:
 Configure the addon in the **Configuration** tab:
 
 ```yaml
-camera_ip: ""
-rtsp_url: "rtsp://192.168.1.100:554/audio"
-audio_port: 10000
 cameras:
   - id: "front"
     ip: "192.168.1.100"
@@ -46,12 +43,11 @@ talk_mode: ptt
 log_level: info
 ```
 
-- `camera_ip`: Default IP for single-camera/fallback mode (optional, can be set per call)
-- `rtsp_url`: Default RTSP URL for single-camera/fallback mode (optional, can be set per call)
-- `audio_port`: Default TCP uplink port for single-camera/fallback mode (default: 10000)
-- `cameras`: Multi-camera list used when selecting by `cam` (`id`, `ip`, `talk_port`)
+- `cameras`: Camera list (use 1 item for single camera, multiple items for multi-camera) (`id`, `ip`, `talk_port`)
 - `talk_mode`: Browser talk mode (`ptt` or `full`)
 - `log_level`: Logging level (trace, debug, info, warning, error)
+
+`camera_ip`, `rtsp_url` and `audio_port` remain available per API/service call when needed, but are no longer required as addon-level options.
 
 ### 4. Start Addon
 
