@@ -9,6 +9,7 @@ This addon enables **bidirectional audio** with Anyka-based IP cameras:
 
 - ✅ **Bidirectional audio** - Talk AND listen simultaneously
 - ✅ **HAOS native** - Runs as a Home Assistant addon
+- ✅ **Ingress UI** - Open the mic web interface directly from the addon panel
 - ✅ **No external dependencies** - Self-contained with ffmpeg
 - ✅ **Simple API** - Easy integration with automations
 - ✅ **Real-time** - Low latency audio streaming
@@ -57,6 +58,7 @@ log_level: info
 1. Go to the **Info** tab
 2. Enable **Start on boot** (optional)
 3. Click **START**
+4. Click **OPEN WEB UI** (Ingress) to use the embedded talk interface
 
 ### 5. Install Integration
 
