@@ -17,14 +17,13 @@ panel_icon: mdi:microphone-message
 panel_title: Anyka Audio
 options:
   cameras: []
-  talk_mode: ptt
   log_level: info
 schema:
   cameras:
     - id: str
       ip: str
       talk_port: int?
-  talk_mode: list(ptt|full)
+      talk_mode: list(ptt|full)?
   log_level: list(trace|debug|info|warning|error)
 ports:
   8099/tcp: 8099

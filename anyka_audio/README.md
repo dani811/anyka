@@ -39,13 +39,14 @@ cameras:
   - id: "front"
     ip: "192.168.1.100"
     talk_port: 10000
-talk_mode: ptt
+    talk_mode: ptt
 log_level: info
 ```
 
-- `cameras`: Camera list (use 1 item for single camera, multiple items for multi-camera) (`id`, `ip`, `talk_port`)
-- `talk_mode`: Browser talk mode (`ptt` or `full`)
+- `cameras`: Camera list (use 1 item for single camera, multiple items for multi-camera) (`id`, `ip`, `talk_port`, `talk_mode`)
 - `log_level`: Logging level (trace, debug, info, warning, error)
+
+If `talk_mode` is omitted in a camera, it defaults to `ptt`.
 
 `camera_ip`, `rtsp_url` and `audio_port` remain available per API/service call when needed, but are no longer required as addon-level options.
 
