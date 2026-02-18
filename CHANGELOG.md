@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.1] - 2026-02-18
+
+### Added
+- Add-on Ingress panel metadata so UI opens via Home Assistant "OPEN WEB UI"
+- Embedded webview endpoint and command-style browser talk controls
+
+### Changed
+- Add-on version bump to `2.0.1` to allow Home Assistant update detection
+- Internal add-on integration manifest version bump to `2.0.1`
+
 ## [2.0.0] - 2026-02-17
 
 ### 🎯 Major Refactor: HAOS Monorepo with Bidirectional Audio

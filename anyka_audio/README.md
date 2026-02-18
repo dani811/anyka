@@ -9,6 +9,7 @@ This addon enables **bidirectional audio** with Anyka-based IP cameras:
 
 - ✅ **Bidirectional audio** - Talk AND listen simultaneously
 - ✅ **HAOS native** - Runs as a Home Assistant addon
+- ✅ **Ingress UI** - Open the mic web interface directly from the addon panel
 - ✅ **No external dependencies** - Self-contained with ffmpeg
 - ✅ **Simple API** - Easy integration with automations
 - ✅ **Real-time** - Low latency audio streaming
@@ -34,15 +35,22 @@ Add this repository to your Home Assistant:
 Configure the addon in the **Configuration** tab:
 
 ```yaml
-camera_ip: "192.168.1.100"
+camera_ip: ""
 rtsp_url: "rtsp://192.168.1.100:554/audio"
 audio_port: 10000
+cameras:
+  - id: "front"
+    ip: "192.168.1.100"
+    talk_port: 10000
+talk_mode: ptt
 log_level: info
 ```
 
 - `camera_ip`: IP address of your Anyka camera (optional, can be set per call)
 - `rtsp_url`: RTSP URL for audio stream from camera (optional, can be set per call)
 - `audio_port`: TCP port for uplink audio (default: 10000)
+- `cameras`: Camera list for multi-camera selection (`id`, `ip`, `talk_port`)
+- `talk_mode`: Browser talk mode (`ptt` or `full`)
 - `log_level`: Logging level (trace, debug, info, warning, error)
 
 ### 4. Start Addon
@@ -50,6 +58,7 @@ log_level: info
 1. Go to the **Info** tab
 2. Enable **Start on boot** (optional)
 3. Click **START**
+4. Click **OPEN WEB UI** (Ingress) to use the embedded talk interface
 
 ### 5. Install Integration
 
@@ -174,12 +183,31 @@ icon: mdi:microphone
 The addon exposes a REST API on port 8099:
 
 - `POST /api/uplink/start` - Start talk (mic → camera)
+- `POST /api/uplink/chunk` - Send real-time browser chunk to running talk stream
 - `POST /api/uplink/upload` - Upload audio bytes and stream to camera
 - `POST /api/uplink/stop` - Stop talk
+- `GET /api/uplink/webview` - Embeddable mic webview for dashboard cards
 - `POST /api/downlink/start` - Start listen (camera → speaker)
 - `POST /api/downlink/stop` - Stop listen
 - `GET /api/status` - Get stream status
 - `GET /health` - Health check
+
+For multi-camera setups, select target camera with query param `?cam=<id>` (for example `/?cam=front` in web UI or `/api/uplink/start?cam=front`).
+
+### Embedded dashboard card (no navigation out of card)
+
+Use an iframe/webpage card pointing to:
+
+`/api/uplink/webview?cam=front&parent_origin=http://homeassistant.local:8123`
+
+This keeps microphone controls inside the card. The embedded page also accepts `postMessage` commands:
+
+```js
+const addonOrigin = "http://homeassistant.local:8099"; // iframe src origin
+iframe.contentWindow.postMessage({ type: "anyka_talk", action: "start", cam: "front" }, addonOrigin);
+iframe.contentWindow.postMessage({ type: "anyka_talk", action: "stop" }, addonOrigin);
+iframe.contentWindow.postMessage({ type: "anyka_talk", action: "toggle" }, addonOrigin);
+```
 
 ## Troubleshooting
 
@@ -191,7 +219,7 @@ The addon exposes a REST API on port 8099:
 
 ### No Audio Input
 
-1. Check microphone is detected: `arecord -L`
+1. Browser/mobile microphone is required for talk (no ALSA dependency inside HAOS container)
 2. Verify camera IP and port
 3. Check firewall allows TCP to camera port 10000
 
@@ -227,6 +255,10 @@ Go to **Addon** → **Log** tab to view detailed logs.
 
 ## Version History
 
+### 2.0.1
+- Enabled Ingress panel UI metadata
+- Embedded webview and command-driven browser talk improvements
+
 ### 2.0.0
 - Complete refactor to HAOS addon
 - Added bidirectional audio support
@@ -236,3 +268,14 @@ Go to **Addon** → **Log** tab to view detailed logs.
 
 ### 1.0.0
 - Initial release (uplink only)
+
+## Maintainer: How Home Assistant detects a new version
+
+To make Home Assistant show an update, publish a **new version number**:
+
+1. Bump addon version in `anyka_audio/config.yaml` (`version` field).
+2. If integration code changed, bump `version` in `anyka_audio/rootfs/app/custom_components/anyka_audio/manifest.json`.
+3. Push the change to the repository branch used by your Add-on repository.
+4. In Home Assistant, refresh Add-on Store / check updates.
+
+Without version bump, Home Assistant treats it as the same release and won't show update availability.

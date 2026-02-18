@@ -3,6 +3,7 @@
 import os
 import sys
 import json
+import re
 import logging
 import subprocess
 import threading
@@ -21,7 +22,41 @@ logger = logging.getLogger(__name__)
 CAMERA_IP = os.getenv('CAMERA_IP', '')
 RTSP_URL = os.getenv('RTSP_URL', '')
 AUDIO_PORT = int(os.getenv('AUDIO_PORT', '10000'))
+CAMERAS_JSON = os.getenv('CAMERAS_JSON', '[]')
+TALK_MODE = os.getenv('TALK_MODE', 'ptt').lower()
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+
+
+def _load_cameras(raw_value):
+    """Load camera map from add-on config."""
+    try:
+        cameras = json.loads(raw_value) if raw_value else []
+    except json.JSONDecodeError:
+        logger.warning("Invalid CAMERAS_JSON, ignoring")
+        return {}
+    camera_map = {}
+    if isinstance(cameras, list):
+        for item in cameras:
+            if not isinstance(item, dict):
+                continue
+            cam_id = str(item.get('id', '')).strip()
+            cam_ip = str(item.get('ip', '')).strip()
+            if not cam_id or not cam_ip:
+                continue
+            if not re.fullmatch(r"[A-Za-z0-9_-]+", cam_id):
+                logger.warning("Skipping invalid camera id: %s", cam_id)
+                continue
+            talk_port = item.get('talk_port', AUDIO_PORT)
+            try:
+                talk_port = int(talk_port)
+            except (TypeError, ValueError):
+                talk_port = AUDIO_PORT
+            camera_map[cam_id] = {'id': cam_id, 'ip': cam_ip, 'talk_port': talk_port}
+    return camera_map
+
+
+CAMERAS = _load_cameras(CAMERAS_JSON)
+DEFAULT_CAMERA_ID = next(iter(CAMERAS), None)
 
 # Flask app
 app = Flask(__name__)
@@ -41,18 +76,20 @@ class AudioManager:
         self.downlink_process = None
         self.lock = threading.Lock()
     
-    def start_uplink(self, camera_ip, audio_port=10000):
-        """Start uplink audio stream (microphone -> camera via TCP)."""
+    def start_uplink(self, camera_ip, audio_port=10000, input_format="webm"):
+        """Start uplink stream from uploaded browser/mobile chunks."""
         with self.lock:
             if self.uplink_process and self.uplink_process.poll() is None:
                 logger.warning("Uplink already running")
                 return False, "Uplink already running"
             
-            # FFmpeg command for uplink (talk)
+            # FFmpeg command for uplink (browser/mobile chunks -> camera TCP)
             cmd = [
                 'ffmpeg',
-                '-f', 'alsa',           # Input from ALSA
-                '-i', 'default',        # Default microphone
+                '-hide_banner',
+                '-loglevel', 'error',
+                '-f', input_format,
+                '-i', 'pipe:0',
                 '-ar', '8000',          # Sample rate 8000 Hz
                 '-ac', '1',             # Mono
                 '-acodec', 'pcm_alaw',  # PCM A-law codec
@@ -63,13 +100,27 @@ class AudioManager:
             try:
                 self.uplink_process = subprocess.Popen(
                     cmd,
+                    stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE
                 )
-                logger.info(f"Uplink started to {camera_ip}:{audio_port} (PID: {self.uplink_process.pid})")
+                logger.info(f"Uplink started to {camera_ip}:{audio_port} format={input_format} (PID: {self.uplink_process.pid})")
                 return True, "Uplink started"
             except Exception as e:
                 logger.error(f"Failed to start uplink: {e}")
+                return False, str(e)
+
+    def feed_uplink(self, audio_bytes):
+        """Feed chunk to running uplink process."""
+        with self.lock:
+            if not self.uplink_process or self.uplink_process.poll() is not None:
+                return False, "Uplink not running"
+            try:
+                self.uplink_process.stdin.write(audio_bytes)
+                self.uplink_process.stdin.flush()
+                return True, "Chunk sent"
+            except Exception as e:
+                logger.error("Failed to feed uplink: %s", e)
                 return False, str(e)
 
     def upload_uplink(self, camera_ip, audio_bytes, audio_port=10000, input_format="wav"):
@@ -124,6 +175,8 @@ class AudioManager:
                 return False, "No uplink running"
             
             try:
+                if self.uplink_process.stdin:
+                    self.uplink_process.stdin.close()
                 self.uplink_process.terminate()
                 self.uplink_process.wait(timeout=5)
                 logger.info("Uplink stopped")
@@ -205,20 +258,43 @@ class AudioManager:
 audio_manager = AudioManager()
 
 
+def resolve_camera_target(cam_id=None, camera_ip=None, audio_port=None):
+    """Resolve camera target from explicit IP, cam id or defaults."""
+    if camera_ip:
+        return camera_ip, int(audio_port or AUDIO_PORT), None
+    if cam_id and cam_id in CAMERAS:
+        cam = CAMERAS[cam_id]
+        return cam['ip'], int(cam.get('talk_port', AUDIO_PORT)), cam_id
+    if CAMERA_IP:
+        return CAMERA_IP, int(audio_port or AUDIO_PORT), None
+    if DEFAULT_CAMERA_ID:
+        cam = CAMERAS[DEFAULT_CAMERA_ID]
+        return cam['ip'], int(cam.get('talk_port', AUDIO_PORT)), cam['id']
+    return None, None, None
+
+
 # API Routes
 @app.route('/api/uplink/start', methods=['POST'])
 def api_start_uplink():
     """Start uplink (talk to camera)."""
-    data = request.get_json() or {}
-    camera_ip = data.get('camera_ip', CAMERA_IP)
-    audio_port = data.get('audio_port', AUDIO_PORT)
-    
-    if not camera_ip:
-        return jsonify({'error': 'camera_ip required'}), 400
-    
-    success, message = audio_manager.start_uplink(camera_ip, audio_port)
+    data = request.get_json(silent=True) or {}
+    cam_id = data.get('cam') or request.args.get('cam')
+    camera_ip = data.get('camera_ip')
+    audio_port = data.get('audio_port')
+    input_format = data.get('input_format', 'webm')
+    if audio_port is not None:
+        try:
+            audio_port = int(audio_port)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'audio_port must be an integer'}), 400
+
+    resolved_ip, resolved_port, resolved_cam = resolve_camera_target(cam_id=cam_id, camera_ip=camera_ip, audio_port=audio_port)
+    if not resolved_ip:
+        return jsonify({'error': 'camera_ip required (or configure cameras + cam)'}), 400
+
+    success, message = audio_manager.start_uplink(resolved_ip, resolved_port, input_format=input_format)
     if success:
-        return jsonify({'status': 'started', 'message': message}), 200
+        return jsonify({'status': 'started', 'message': message, 'camera_ip': resolved_ip, 'audio_port': resolved_port, 'cam': resolved_cam}), 200
     else:
         return jsonify({'error': message}), 500
 
@@ -236,14 +312,18 @@ def api_stop_uplink():
 @app.route('/api/uplink/upload', methods=['POST'])
 def api_upload_uplink():
     """Upload and stream audio bytes to camera (no URL dependency)."""
-    camera_ip = request.form.get('camera_ip', CAMERA_IP)
-    if not camera_ip:
-        return jsonify({'error': 'camera_ip required'}), 400
+    cam_id = request.form.get('cam') or request.args.get('cam')
+    camera_ip = request.form.get('camera_ip')
 
     try:
-        audio_port = int(request.form.get('audio_port', AUDIO_PORT))
+        raw_port = request.form.get('audio_port')
+        audio_port = int(raw_port) if raw_port else None
     except (TypeError, ValueError):
         return jsonify({'error': 'audio_port must be an integer'}), 400
+
+    resolved_ip, resolved_port, resolved_cam = resolve_camera_target(cam_id=cam_id, camera_ip=camera_ip, audio_port=audio_port)
+    if not resolved_ip:
+        return jsonify({'error': 'camera_ip required (or configure cameras + cam)'}), 400
 
     audio_file = request.files.get('audio')
     if audio_file is None:
@@ -256,10 +336,22 @@ def api_upload_uplink():
         return jsonify({'error': f'audio file too large (max {MAX_UPLOAD_BYTES} bytes)'}), 413
 
     input_format = request.form.get('input_format', 'wav')
-    success, message = audio_manager.upload_uplink(camera_ip, audio_bytes, audio_port, input_format=input_format)
+    success, message = audio_manager.upload_uplink(resolved_ip, audio_bytes, resolved_port, input_format=input_format)
     if success:
-        return jsonify({'status': 'uploaded', 'message': message}), 200
+        return jsonify({'status': 'uploaded', 'message': message, 'camera_ip': resolved_ip, 'audio_port': resolved_port, 'cam': resolved_cam}), 200
     return jsonify({'error': message}), 500
+
+
+@app.route('/api/uplink/chunk', methods=['POST'])
+def api_uplink_chunk():
+    """Send real-time chunk to running uplink process."""
+    audio_bytes = request.get_data(cache=False, as_text=False)
+    if not audio_bytes:
+        return jsonify({'error': 'audio chunk required'}), 400
+    success, message = audio_manager.feed_uplink(audio_bytes)
+    if success:
+        return jsonify({'status': 'ok', 'message': message}), 200
+    return jsonify({'error': message}), 409
 
 
 @app.route('/api/downlink/start', methods=['POST'])
@@ -292,6 +384,9 @@ def api_stop_downlink():
 def api_status():
     """Get status of audio streams."""
     status = audio_manager.get_status()
+    status['talk_mode'] = TALK_MODE
+    status['default_camera'] = DEFAULT_CAMERA_ID
+    status['cameras'] = list(CAMERAS.values())
     return jsonify(status), 200
 
 
@@ -301,25 +396,131 @@ def health():
     return jsonify({'status': 'healthy'}), 200
 
 
-@app.route('/', methods=['GET'])
-def index():
-    """Index page."""
-    return """
+def _render_talk_page(embedded=False):
+    """Render browser/mobile talk page."""
+    cameras_json = json.dumps(list(CAMERAS.values()))
+    default_cam_json = json.dumps(DEFAULT_CAMERA_ID or "")
+    talk_mode_json = json.dumps(TALK_MODE if TALK_MODE in ("ptt", "full") else "ptt")
+    embedded_json = json.dumps(bool(embedded))
+    body_margin = "8px" if embedded else "20px"
+    return f"""
     <html>
     <head><title>Anyka Bidirectional Audio</title></head>
-    <body>
-        <h1>Anyka Bidirectional Audio Addon</h1>
-        <p>API Endpoints:</p>
-        <ul>
-            <li>POST /api/uplink/start - Start talk (mic -> camera)</li>
-            <li>POST /api/uplink/stop - Stop talk</li>
-            <li>POST /api/downlink/start - Start listen (camera -> speaker)</li>
-            <li>POST /api/downlink/stop - Stop listen</li>
-            <li>GET /api/status - Get stream status</li>
-        </ul>
+    <body style="font-family: sans-serif; margin: {body_margin};">
+        {'<h1>Anyka Bidirectional Audio Addon</h1>' if not embedded else ''}
+        <p><strong>Talk mode:</strong> {TALK_MODE.upper()}</p>
+        <label for="camera">Camera:</label>
+        <select id="camera"></select>
+        <button id="ptt">Hold to Talk</button>
+        <button id="toggle">Start/Stop (FULL)</button>
+        <pre id="status"></pre>
+        <script>
+            const cameras = {cameras_json};
+            const defaultCam = {default_cam_json};
+            const talkMode = {talk_mode_json};
+            const embedded = {embedded_json};
+            const params = new URLSearchParams(window.location.search);
+            const camFromQuery = params.get("cam");
+            const allowedOriginRaw = params.get("parent_origin");
+            let allowedOrigin = "";
+            if (allowedOriginRaw) {{
+                try {{
+                    const parsed = new URL(allowedOriginRaw);
+                    if (parsed.protocol === "http:" || parsed.protocol === "https:") allowedOrigin = parsed.origin;
+                }} catch (_error) {{
+                    console.warn("Invalid parent_origin:", allowedOriginRaw);
+                }}
+            }}
+            const cameraSelect = document.getElementById("camera");
+            const statusEl = document.getElementById("status");
+            const btnPtt = document.getElementById("ptt");
+            const btnToggle = document.getElementById("toggle");
+            let recorder = null;
+            let stream = null;
+            let running = false;
+
+            const selected = camFromQuery || defaultCam || (Array.isArray(cameras) && cameras.length > 0 ? cameras[0].id : "");
+            cameras.forEach((cam) => {{
+                const opt = document.createElement("option");
+                opt.value = cam.id;
+                opt.textContent = `${{cam.id}} (${{cam.ip}}:${{cam.talk_port || 10000}})`;
+                if (cam.id === selected) opt.selected = true;
+                cameraSelect.appendChild(opt);
+            }});
+            statusEl.textContent = embedded ? "ready (embedded webview)" : "ready";
+            if (embedded && !allowedOrigin) statusEl.textContent = "ready (commands disabled: set parent_origin)";
+
+            async function startTalk() {{
+                if (running) return;
+                const cam = cameraSelect.value || "";
+                try {{
+                    const startRes = await fetch(`/api/uplink/start?cam=${{encodeURIComponent(cam)}}`, {{ method: "POST", headers: {{ "Content-Type": "application/json" }}, body: JSON.stringify({{ input_format: "webm", cam }}) }});
+                    const startData = await startRes.json().catch(() => ({{}}));
+                    if (!startRes.ok) throw new Error(startData.error || "failed to start uplink");
+                    stream = await navigator.mediaDevices.getUserMedia({{ audio: true }});
+                    recorder = new MediaRecorder(stream, {{ mimeType: "audio/webm" }});
+                    recorder.ondataavailable = async (event) => {{
+                        if (!event.data || !event.data.size) return;
+                        const chunkRes = await fetch(`/api/uplink/chunk?cam=${{encodeURIComponent(cam)}}`, {{ method: "POST", body: await event.data.arrayBuffer() }});
+                        if (!chunkRes.ok) statusEl.textContent = `chunk upload failed: ${{chunkRes.status}}`;
+                    }};
+                    recorder.start(250);
+                    running = true;
+                    statusEl.textContent = `talking to cam=${{cam}}`;
+                }} catch (error) {{
+                    statusEl.textContent = `start failed: ${{error.message}}`;
+                    await stopTalk();
+                }}
+            }}
+
+            async function stopTalk() {{
+                if (recorder) recorder.stop();
+                if (stream) stream.getTracks().forEach((t) => t.stop());
+                const stopRes = await fetch("/api/uplink/stop", {{ method: "POST" }});
+                const stopData = await stopRes.json().catch(() => ({{}}));
+                if (!stopRes.ok) statusEl.textContent = `stop failed: ${{stopData.error || "unknown"}}`;
+                recorder = null;
+                stream = null;
+                running = false;
+                if (stopRes.ok) statusEl.textContent = "stopped";
+            }}
+
+            if (talkMode === "full") {{
+                btnPtt.style.display = "none";
+                btnToggle.onclick = async () => {{ if (running) await stopTalk(); else await startTalk(); }};
+            }} else {{
+                btnToggle.style.display = "none";
+                btnPtt.onpointerdown = async (event) => {{ event.preventDefault(); await startTalk(); }};
+                btnPtt.onpointerup = async (event) => {{ event.preventDefault(); await stopTalk(); }};
+            }}
+
+            window.addEventListener("message", async (event) => {{
+                if (!embedded) return;
+                if (!allowedOrigin) return;
+                if (event.origin !== allowedOrigin) return;
+                const data = event.data || {{}};
+                if (data.type !== "anyka_talk") return;
+                if (data.cam) cameraSelect.value = data.cam;
+                if (data.action === "start") await startTalk();
+                if (data.action === "stop") await stopTalk();
+                if (data.action === "toggle") {{ if (running) await stopTalk(); else await startTalk(); }}
+            }});
+        </script>
     </body>
     </html>
     """
+
+
+@app.route('/', methods=['GET'])
+def index():
+    """Index page."""
+    return _render_talk_page(embedded=(request.args.get('embedded') == '1'))
+
+
+@app.route('/api/uplink/webview', methods=['GET'])
+def uplink_webview():
+    """Embeddable webview page for dashboard cards."""
+    return _render_talk_page(embedded=True)
 
 
 if __name__ == '__main__':
@@ -327,6 +528,8 @@ if __name__ == '__main__':
     logger.info(f"Camera IP: {CAMERA_IP}")
     logger.info(f"RTSP URL: {RTSP_URL}")
     logger.info(f"Audio Port: {AUDIO_PORT}")
+    logger.info(f"Talk mode: {TALK_MODE}")
+    logger.info("Configured cameras: %s", ",".join(CAMERAS.keys()) if CAMERAS else "none")
     
     # Start Flask server
     app.run(host='0.0.0.0', port=8099, debug=(LOG_LEVEL == 'DEBUG'))
