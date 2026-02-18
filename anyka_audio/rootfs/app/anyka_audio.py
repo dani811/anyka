@@ -332,8 +332,9 @@ def api_start_uplink():
     success, message = audio_manager.start_uplink(resolved_ip, resolved_port, input_format=input_format)
     if success:
         return jsonify({'status': 'started', 'message': message, 'camera_ip': resolved_ip, 'audio_port': resolved_port, 'cam': resolved_cam}), 200
-    else:
-        return jsonify({'error': message}), 500
+    if message == "Uplink already running":
+        return jsonify({'status': 'running', 'message': message, 'camera_ip': resolved_ip, 'audio_port': resolved_port, 'cam': resolved_cam}), 200
+    return jsonify({'error': message}), 500
 
 
 @app.route('/api/uplink/stop', methods=['POST'])
