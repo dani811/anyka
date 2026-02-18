@@ -255,6 +255,9 @@ Go to **Addon** → **Log** tab to view detailed logs.
 
 ## Version History
 
+### 2.0.2
+- Multi-camera config no longer requires root `audio_port`
+
 ### 2.0.1
 - Enabled Ingress panel UI metadata
 - Embedded webview and command-driven browser talk improvements
