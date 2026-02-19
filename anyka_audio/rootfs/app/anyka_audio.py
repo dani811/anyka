@@ -67,8 +67,9 @@ def _load_cameras(raw_value):
             if not isinstance(item, dict):
                 continue
             cam_id = str(item.get('id', '')).strip()
+            cam_stream = str(item.get('stream', '')).strip()
             cam_ip = str(item.get('ip', '')).strip()
-            if not cam_id or not cam_ip:
+            if not cam_id or not cam_stream or not cam_ip:
                 continue
             if not re.fullmatch(r"[A-Za-z0-9_-]+", cam_id):
                 logger.warning("Skipping invalid camera id: %s", cam_id)
@@ -81,8 +82,31 @@ def _load_cameras(raw_value):
             talk_mode = str(item.get('talk_mode', DEFAULT_TALK_MODE)).strip().lower()
             if talk_mode not in ("ptt", "full"):
                 talk_mode = DEFAULT_TALK_MODE
-            camera_map[cam_id] = {'id': cam_id, 'ip': cam_ip, 'talk_port': talk_port, 'talk_mode': talk_mode}
+            entity_id = str(item.get('entity_id', '')).strip()
+            camera_map[cam_id] = {
+                'id': cam_id,
+                'stream': cam_stream,
+                'entity_id': entity_id or None,
+                'ip': cam_ip,
+                'talk_port': talk_port,
+                'talk_mode': talk_mode
+            }
     return camera_map
+
+
+def _build_camera_indexes(camera_map):
+    """Create fast lookup dictionaries for camera selectors."""
+    by_id = dict(camera_map)
+    by_stream = {}
+    by_entity = {}
+    for camera in camera_map.values():
+        stream_name = str(camera.get('stream', '')).strip()
+        entity_id = str(camera.get('entity_id', '')).strip()
+        if stream_name:
+            by_stream[stream_name] = camera
+        if entity_id:
+            by_entity[entity_id] = camera
+    return by_id, by_stream, by_entity
 
 
 CAMERAS = _load_cameras(CAMERAS_JSON)
@@ -95,6 +119,7 @@ if not CAMERAS:
         logger.debug("Could not load cameras from /data/options.json: %s", exc)
         CAMERAS = {}
 DEFAULT_CAMERA_ID = next(iter(CAMERAS), None)
+cameras_by_id, cameras_by_stream, cameras_by_entity = _build_camera_indexes(CAMERAS)
 
 # Flask app
 app = Flask(__name__)
@@ -120,6 +145,9 @@ class AudioManager:
         """Start uplink stream from uploaded browser/mobile chunks."""
         with self.lock:
             if self.uplink_process and self.uplink_process.poll() is None:
+                if cam_id and self.uplink_cam and cam_id != self.uplink_cam:
+                    logger.warning("Uplink running for different camera")
+                    return False, UPLINK_DIFFERENT_CAMERA_MSG
                 logger.warning("Uplink already running")
                 return False, UPLINK_ALREADY_RUNNING_MSG
             
@@ -326,21 +354,44 @@ class AudioManager:
 audio_manager = AudioManager()
 
 
-def resolve_camera_target(cam_id=None, camera_ip=None, audio_port=None):
-    """Resolve camera target from explicit IP, cam id or defaults."""
-    if camera_ip:
-        return camera_ip, int(audio_port or AUDIO_PORT), None
-    if cam_id and cam_id in CAMERAS:
-        cam = CAMERAS[cam_id]
-        return cam['ip'], int(cam.get('talk_port', AUDIO_PORT)), cam_id
-    if cam_id:
-        return None, None, None
-    if CAMERA_IP:
-        return CAMERA_IP, int(audio_port or AUDIO_PORT), None
-    if DEFAULT_CAMERA_ID:
-        cam = CAMERAS[DEFAULT_CAMERA_ID]
-        return cam['ip'], int(cam.get('talk_port', AUDIO_PORT)), cam['id']
-    return None, None, None
+def _request_value(req, key, data):
+    """Return first non-empty value for key from json, query string or form."""
+    values = (data.get(key), req.args.get(key), req.form.get(key))
+    for value in values:
+        if value not in (None, ""):
+            return str(value).strip()
+    return ""
+
+
+def resolve_camera(req):
+    """Resolve camera using entity_id, stream, id or legacy cam selectors."""
+    data = req.get_json(silent=True) or {}
+    selectors = {
+        'entity_id': _request_value(req, 'entity_id', data),
+        'stream': _request_value(req, 'stream', data),
+        'id': _request_value(req, 'id', data),
+        'cam': _request_value(req, 'cam', data),
+    }
+    provided = {k: v for k, v in selectors.items() if v}
+    matches = {}
+    if selectors['entity_id']:
+        matches['entity_id'] = cameras_by_entity.get(selectors['entity_id'])
+    if selectors['stream']:
+        matches['stream'] = cameras_by_stream.get(selectors['stream'])
+    if selectors['id']:
+        matches['id'] = cameras_by_id.get(selectors['id'])
+    if selectors['cam']:
+        matches['cam'] = cameras_by_id.get(selectors['cam'])
+    resolved_ids = {camera['id'] for camera in matches.values() if camera}
+    if len(resolved_ids) > 1:
+        return None, {'error': 'camera_not_found', 'provided': provided}
+    for key in ('entity_id', 'stream', 'id', 'cam'):
+        camera = matches.get(key)
+        if camera:
+            return camera, None
+    if not provided and DEFAULT_CAMERA_ID and DEFAULT_CAMERA_ID in cameras_by_id:
+        return cameras_by_id[DEFAULT_CAMERA_ID], None
+    return None, {'error': 'camera_not_found', 'provided': provided}
 
 
 # API Routes
@@ -348,7 +399,6 @@ def resolve_camera_target(cam_id=None, camera_ip=None, audio_port=None):
 def api_start_uplink():
     """Start uplink (talk to camera)."""
     data = request.get_json(silent=True) or {}
-    cam_id = data.get('cam') or request.args.get('cam')
     camera_ip = data.get('camera_ip')
     audio_port = data.get('audio_port')
     input_format = data.get('input_format', 'webm')
@@ -358,26 +408,36 @@ def api_start_uplink():
         except (TypeError, ValueError):
             return jsonify({'error': 'audio_port must be an integer'}), 400
 
-    resolved_ip, resolved_port, resolved_cam = resolve_camera_target(cam_id=cam_id, camera_ip=camera_ip, audio_port=audio_port)
-    if cam_id and not camera_ip and resolved_ip is None:
-        return jsonify({'error': f'unknown camera id: {cam_id}'}), 400
-    if not resolved_ip:
-        return jsonify({'error': 'camera_ip required (or configure cameras + cam)'}), 400
+    if camera_ip:
+        resolved_ip = str(camera_ip).strip()
+        resolved_port = int(audio_port or AUDIO_PORT)
+        resolved_cam = None
+    else:
+        camera, camera_error = resolve_camera(request)
+        if camera_error:
+            return jsonify(camera_error), 400
+        resolved_ip = camera['ip']
+        resolved_port = int(camera.get('talk_port', AUDIO_PORT))
+        resolved_cam = camera['id']
 
-    active_cam = resolved_cam or cam_id
+    active_cam = resolved_cam
     success, message = audio_manager.start_uplink(resolved_ip, resolved_port, input_format=input_format, cam_id=active_cam)
     if success:
         return jsonify({'status': 'started', 'message': message, 'camera_ip': resolved_ip, 'audio_port': resolved_port, 'cam': resolved_cam}), 200
     if message == UPLINK_ALREADY_RUNNING_MSG:
         return jsonify({'status': 'running', 'message': message, 'camera_ip': resolved_ip, 'audio_port': resolved_port, 'cam': resolved_cam}), 200
+    if message == UPLINK_DIFFERENT_CAMERA_MSG:
+        return jsonify({'error': message}), 409
     return jsonify({'error': message}), 500
 
 
 @app.route('/api/uplink/stop', methods=['POST'])
 def api_stop_uplink():
     """Stop uplink."""
-    data = request.get_json(silent=True) or {}
-    cam_id = data.get('cam') or request.args.get('cam')
+    camera, camera_error = resolve_camera(request)
+    if camera_error and camera_error.get('provided'):
+        return jsonify(camera_error), 400
+    cam_id = camera['id'] if camera else None
     success, message = audio_manager.stop_uplink(cam_id=cam_id)
     if success:
         return jsonify({'status': 'stopped', 'message': message}), 200
@@ -389,7 +449,6 @@ def api_stop_uplink():
 @app.route('/api/uplink/upload', methods=['POST'])
 def api_upload_uplink():
     """Upload and stream audio bytes to camera (no URL dependency)."""
-    cam_id = request.form.get('cam') or request.args.get('cam')
     camera_ip = request.form.get('camera_ip')
 
     try:
@@ -398,11 +457,17 @@ def api_upload_uplink():
     except (TypeError, ValueError):
         return jsonify({'error': 'audio_port must be an integer'}), 400
 
-    resolved_ip, resolved_port, resolved_cam = resolve_camera_target(cam_id=cam_id, camera_ip=camera_ip, audio_port=audio_port)
-    if cam_id and not camera_ip and resolved_ip is None:
-        return jsonify({'error': f'unknown camera id: {cam_id}'}), 400
-    if not resolved_ip:
-        return jsonify({'error': 'camera_ip required (or configure cameras + cam)'}), 400
+    if camera_ip:
+        resolved_ip = str(camera_ip).strip()
+        resolved_port = int(audio_port or AUDIO_PORT)
+        resolved_cam = None
+    else:
+        camera, camera_error = resolve_camera(request)
+        if camera_error:
+            return jsonify(camera_error), 400
+        resolved_ip = camera['ip']
+        resolved_port = int(camera.get('talk_port', AUDIO_PORT))
+        resolved_cam = camera['id']
 
     audio_file = request.files.get('audio')
     if audio_file is None:
@@ -424,9 +489,10 @@ def api_upload_uplink():
 @app.route('/api/uplink/chunk', methods=['POST'])
 def api_uplink_chunk():
     """Send real-time chunk to running uplink process."""
-    cam_id = request.args.get('cam')
-    if cam_id and CAMERAS and cam_id not in CAMERAS:
-        return jsonify({'error': f'unknown camera id: {cam_id}'}), 400
+    camera, camera_error = resolve_camera(request)
+    if camera_error and camera_error.get('provided'):
+        return jsonify(camera_error), 400
+    cam_id = camera['id'] if camera else None
     audio_bytes = request.get_data(cache=False, as_text=False)
     if not audio_bytes:
         return jsonify({'error': 'audio chunk required'}), 400
@@ -465,11 +531,17 @@ def api_stop_downlink():
 @app.route('/api/status', methods=['GET'])
 def api_status():
     """Get status of audio streams."""
-    status = audio_manager.get_status()
-    status['default_talk_mode'] = DEFAULT_TALK_MODE
-    status['default_camera'] = DEFAULT_CAMERA_ID
-    status['cameras'] = list(CAMERAS.values())
-    return jsonify(status), 200
+    manager_status = audio_manager.get_status()
+    active = manager_status.get('uplink_cam')
+    uplink = {}
+    if manager_status.get('uplink') == 'running' and active:
+        uplink[active] = 'running'
+    return jsonify({
+        'uplink': uplink,
+        'active': active,
+        'downlink': manager_status.get('downlink'),
+        'cameras': list(cameras_by_id.values())
+    }), 200
 
 
 @app.route('/health', methods=['GET'])
@@ -503,7 +575,11 @@ def _render_talk_page(embedded=False):
             const defaultCam = {default_cam_json};
             const embedded = {embedded_json};
             const params = new URLSearchParams(window.location.search);
+            const queryEntityId = params.get("entity_id");
+            const queryStream = params.get("stream");
+            const queryId = params.get("id");
             const camFromQuery = params.get("cam");
+            const compact = params.get("compact") === "1";
             const ingressMatch = window.location.pathname.match(new RegExp("^/api/hassio_ingress/[^/]+"));
             const apiBasePath = ingressMatch ? ingressMatch[0] : "";
             const allowedOriginRaw = params.get("parent_origin");
@@ -517,6 +593,7 @@ def _render_talk_page(embedded=False):
                 }}
             }}
             const cameraSelect = document.getElementById("camera");
+            const cameraLabel = document.querySelector('label[for="camera"]');
             const statusEl = document.getElementById("status");
             const btnPtt = document.getElementById("ptt");
             const btnToggle = document.getElementById("toggle");
@@ -527,14 +604,22 @@ def _render_talk_page(embedded=False):
             let uplinkRunning = false;
             let opInFlight = false;
 
-            const selected = camFromQuery || defaultCam || (Array.isArray(cameras) && cameras.length > 0 ? cameras[0].id : "");
+            const selectedCamera = cameras.find((cam) => queryEntityId && cam.entity_id === queryEntityId)
+                || cameras.find((cam) => queryStream && cam.stream === queryStream)
+                || cameras.find((cam) => queryId && cam.id === queryId)
+                || cameras.find((cam) => camFromQuery && cam.id === camFromQuery);
+            const selected = (selectedCamera && selectedCamera.id) || defaultCam || (Array.isArray(cameras) && cameras.length > 0 ? cameras[0].id : "");
             cameras.forEach((cam) => {{
                 const opt = document.createElement("option");
                 opt.value = cam.id;
-                opt.textContent = `${{cam.id}} (${{cam.ip}}:${{cam.talk_port || 10000}})`;
+                opt.textContent = `${{cam.id}} (${{cam.stream}})`;
                 if (cam.id === selected) opt.selected = true;
                 cameraSelect.appendChild(opt);
             }});
+            if (compact) {{
+                cameraSelect.style.display = "none";
+                if (cameraLabel) cameraLabel.style.display = "none";
+            }}
             statusEl.textContent = embedded ? "ready (embedded webview)" : "ready";
             if (embedded && !allowedOrigin) statusEl.textContent = "ready (commands disabled: set parent_origin)";
             function getCurrentTalkMode() {{
@@ -563,7 +648,7 @@ def _render_talk_page(embedded=False):
                 let startedRemote = false;
                 opInFlight = true;
                 try {{
-                    const startRes = await fetch(`${{apiBasePath}}/api/uplink/start?cam=${{encodeURIComponent(cam)}}`, {{ method: "POST", headers: {{ "Content-Type": "application/json" }}, body: JSON.stringify({{ input_format: "webm", cam }}) }});
+                    const startRes = await fetch(`${{apiBasePath}}/api/uplink/start?id=${{encodeURIComponent(cam)}}`, {{ method: "POST", headers: {{ "Content-Type": "application/json" }}, body: JSON.stringify({{ input_format: "webm", id: cam }}) }});
                     const startData = await startRes.json().catch(() => ({{}}));
                     if (!startRes.ok) throw new Error(startData.error || "failed to start uplink");
                     startedRemote = true;
@@ -573,7 +658,7 @@ def _render_talk_page(embedded=False):
                     recorder.ondataavailable = async (event) => {{
                         if (!uplinkRunning) return;
                         if (!event.data || !event.data.size) return;
-                        const chunkRes = await fetch(`${{apiBasePath}}/api/uplink/chunk?cam=${{encodeURIComponent(cam)}}`, {{ method: "POST", body: await event.data.arrayBuffer() }});
+                        const chunkRes = await fetch(`${{apiBasePath}}/api/uplink/chunk?id=${{encodeURIComponent(cam)}}`, {{ method: "POST", body: await event.data.arrayBuffer() }});
                         if (chunkRes.status === 409) {{
                             uplinkRunning = false;
                             running = false;
@@ -602,7 +687,7 @@ def _render_talk_page(embedded=False):
                     running = false;
                     uplinkRunning = false;
                     if (startedRemote) {{
-                        await fetch(`${{apiBasePath}}/api/uplink/stop?cam=${{encodeURIComponent(cam)}}`, {{ method: "POST" }});
+                        await fetch(`${{apiBasePath}}/api/uplink/stop?id=${{encodeURIComponent(cam)}}`, {{ method: "POST" }});
                     }}
                 }} finally {{
                     opInFlight = false;
@@ -619,7 +704,7 @@ def _render_talk_page(embedded=False):
                     }}
                     if (stream) stream.getTracks().forEach((t) => t.stop());
                     const cam = cameraSelect.value || "";
-                    const stopRes = await fetch(`${{apiBasePath}}/api/uplink/stop?cam=${{encodeURIComponent(cam)}}`, {{ method: "POST" }});
+                    const stopRes = await fetch(`${{apiBasePath}}/api/uplink/stop?id=${{encodeURIComponent(cam)}}`, {{ method: "POST" }});
                     const stopData = await stopRes.json().catch(() => ({{}}));
                     if (!stopRes.ok) statusEl.textContent = `stop failed: ${{stopData.error || "unknown"}}`;
                     recorder = null;
@@ -659,6 +744,12 @@ def _render_talk_page(embedded=False):
 def index():
     """Index page."""
     return _render_talk_page(embedded=(request.args.get('embedded') == '1'))
+
+
+@app.route('/ui/intercom', methods=['GET'])
+def ui_intercom():
+    """Ingress deep-link for intercom UI."""
+    return _render_talk_page(embedded=False)
 
 
 @app.route('/api/uplink/webview', methods=['GET'])

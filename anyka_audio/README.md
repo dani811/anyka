@@ -37,13 +37,15 @@ Configure the addon in the **Configuration** tab:
 ```yaml
 cameras:
   - id: "front"
+    stream: "anyka_front"
+    entity_id: "camera.front"
     ip: "192.168.1.100"
     talk_port: 10000
     talk_mode: ptt
 log_level: info
 ```
 
-- `cameras`: Camera list (use 1 item for single camera, multiple items for multi-camera) (`id`, `ip`, `talk_port`, `talk_mode`)
+- `cameras`: Camera list (use 1 item for single camera, multiple items for multi-camera) (`id`, `stream`, `entity_id`, `ip`, `talk_port`, `talk_mode`)
 - `log_level`: Logging level (trace, debug, info, warning, error)
 
 If `talk_mode` is omitted in a camera, it defaults to `ptt`.
@@ -179,7 +181,29 @@ The addon exposes a REST API on port 8099:
 - `GET /api/status` - Get stream status
 - `GET /health` - Health check
 
-For multi-camera setups, select target camera with query param `?cam=<id>` (for example `/?cam=front` in web UI or `/api/uplink/start?cam=front`). `cam` is also accepted in `/api/uplink/chunk` and `/api/uplink/stop` to keep concurrent dashboard controls scoped to the active camera.
+For multi-camera setups, select target camera with `entity_id`, `stream`, `id` or legacy `cam`:
+
+- `/api/uplink/start?entity_id=camera.front`
+- `/api/uplink/start?stream=anyka_front`
+- `/api/uplink/start?id=front`
+- `/api/uplink/start?cam=front` (legacy)
+
+The same selectors are supported in `/api/uplink/chunk` and `/api/uplink/stop`.
+
+### Ingress deep links (Advanced Camera Card / Frigate)
+
+Use the add-on ingress UI directly from existing cards:
+
+- `/ui/intercom?stream=anyka_front`
+- `/ui/intercom?entity_id=camera.front`
+- `/ui/intercom?id=front`
+- `/ui/intercom?stream=anyka_front&compact=1` (hides camera selector)
+
+Expected architecture:
+
+`Advanced Camera Card / Frigate -> go2rtc stream -> ingress deep link -> anyka_audio sends uplink to camera ip:talk_port`
+
+No custom Lovelace card is required.
 
 ### Embedded dashboard card (no navigation out of card)
 
