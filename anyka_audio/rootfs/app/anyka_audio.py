@@ -7,6 +7,7 @@ import re
 import logging
 import subprocess
 import threading
+import time
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
@@ -34,6 +35,8 @@ DEFAULT_TALK_MODE = "ptt"
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 UPLINK_ALREADY_RUNNING_MSG = "Uplink already running"
 UPLINK_DIFFERENT_CAMERA_MSG = "Uplink running for different camera"
+UPLINK_NOT_READY_MSG = "uplink not ready, try again"
+UPLINK_STARTUP_WAIT_SECONDS = 0.3
 
 
 def _get_env_int(name, default):
@@ -110,6 +113,7 @@ class AudioManager:
         self.uplink_process = None
         self.downlink_process = None
         self.uplink_cam = None
+        self.uplink_ready = False
         self.lock = threading.Lock()
     
     def start_uplink(self, camera_ip, audio_port=10000, input_format="webm", cam_id=None):
@@ -141,9 +145,24 @@ class AudioManager:
                     stderr=subprocess.PIPE
                 )
                 self.uplink_cam = cam_id
+                self.uplink_ready = False
+                time.sleep(UPLINK_STARTUP_WAIT_SECONDS)
+                if self.uplink_process.poll() is not None:
+                    stderr_text = ""
+                    if self.uplink_process.stderr:
+                        stderr_text = self.uplink_process.stderr.read().decode(errors='ignore').strip()
+                    error_message = stderr_text or f"ffmpeg exited early (return code {self.uplink_process.returncode})"
+                    self.uplink_process = None
+                    self.uplink_cam = None
+                    logger.error("Failed to start uplink: %s", error_message)
+                    return False, error_message
+                self.uplink_ready = True
                 logger.info(f"Uplink started to {camera_ip}:{audio_port} format={input_format} (PID: {self.uplink_process.pid})")
                 return True, "Uplink started"
             except Exception as e:
+                self.uplink_process = None
+                self.uplink_cam = None
+                self.uplink_ready = False
                 logger.error(f"Failed to start uplink: {e}")
                 return False, str(e)
 
@@ -151,7 +170,10 @@ class AudioManager:
         """Feed chunk to running uplink process."""
         with self.lock:
             if not self.uplink_process or self.uplink_process.poll() is not None:
-                return False, "Uplink not running"
+                self.uplink_ready = False
+                return False, f"uplink not started for cam {cam_id or self.uplink_cam or 'default'}"
+            if not self.uplink_ready:
+                return False, UPLINK_NOT_READY_MSG
             if cam_id and self.uplink_cam and cam_id != self.uplink_cam:
                 return False, UPLINK_DIFFERENT_CAMERA_MSG
             try:
@@ -223,6 +245,7 @@ class AudioManager:
                 logger.info("Uplink stopped")
                 self.uplink_process = None
                 self.uplink_cam = None
+                self.uplink_ready = False
                 return True, "Uplink stopped"
             except subprocess.TimeoutExpired:
                 logger.warning("Uplink didn't terminate, killing")
@@ -230,6 +253,7 @@ class AudioManager:
                 self.uplink_process.wait()
                 self.uplink_process = None
                 self.uplink_cam = None
+                self.uplink_ready = False
                 return True, "Uplink killed"
             except Exception as e:
                 logger.error(f"Failed to stop uplink: {e}")
@@ -401,6 +425,8 @@ def api_upload_uplink():
 def api_uplink_chunk():
     """Send real-time chunk to running uplink process."""
     cam_id = request.args.get('cam')
+    if cam_id and CAMERAS and cam_id not in CAMERAS:
+        return jsonify({'error': f'unknown camera id: {cam_id}'}), 400
     audio_bytes = request.get_data(cache=False, as_text=False)
     if not audio_bytes:
         return jsonify({'error': 'audio chunk required'}), 400
@@ -498,6 +524,7 @@ def _render_talk_page(embedded=False):
             let recorder = null;
             let stream = null;
             let running = false;
+            let uplinkRunning = false;
             let opInFlight = false;
 
             const selected = camFromQuery || defaultCam || (Array.isArray(cameras) && cameras.length > 0 ? cameras[0].id : "");
@@ -540,14 +567,28 @@ def _render_talk_page(embedded=False):
                     const startData = await startRes.json().catch(() => ({{}}));
                     if (!startRes.ok) throw new Error(startData.error || "failed to start uplink");
                     startedRemote = true;
+                    uplinkRunning = true;
                     stream = await navigator.mediaDevices.getUserMedia({{ audio: true }});
                     recorder = new MediaRecorder(stream, {{ mimeType: "audio/webm" }});
                     recorder.ondataavailable = async (event) => {{
+                        if (!uplinkRunning) return;
                         if (!event.data || !event.data.size) return;
                         const chunkRes = await fetch(`${{apiBasePath}}/api/uplink/chunk?cam=${{encodeURIComponent(cam)}}`, {{ method: "POST", body: await event.data.arrayBuffer() }});
+                        if (chunkRes.status === 409) {{
+                            uplinkRunning = false;
+                            running = false;
+                            try {{ recorder.stop(); }} catch (_error) {{}}
+                            if (stream) stream.getTracks().forEach((t) => t.stop());
+                            recorder = null;
+                            stream = null;
+                            statusEl.textContent = "chunk rejected (409). stopped";
+                            return;
+                        }}
                         if (!chunkRes.ok) statusEl.textContent = `chunk upload failed: ${{chunkRes.status}}`;
                     }};
-                    recorder.start(250);
+                    setTimeout(() => {{
+                        if (recorder && recorder.state === "inactive" && uplinkRunning) recorder.start(250);
+                    }}, 200);
                     running = true;
                     statusEl.textContent = `talking to cam=${{cam}}`;
                 }} catch (error) {{
@@ -559,6 +600,7 @@ def _render_talk_page(embedded=False):
                     recorder = null;
                     stream = null;
                     running = false;
+                    uplinkRunning = false;
                     if (startedRemote) {{
                         await fetch(`${{apiBasePath}}/api/uplink/stop?cam=${{encodeURIComponent(cam)}}`, {{ method: "POST" }});
                     }}
@@ -571,6 +613,7 @@ def _render_talk_page(embedded=False):
                 if (opInFlight) return;
                 opInFlight = true;
                 try {{
+                    uplinkRunning = false;
                     if (recorder && recorder.state !== "inactive") {{
                         try {{ recorder.stop(); }} catch (_error) {{}}
                     }}
