@@ -36,6 +36,7 @@ MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 UPLINK_ALREADY_RUNNING_MSG = "Uplink already running"
 UPLINK_DIFFERENT_CAMERA_MSG = "Uplink running for different camera"
 UPLINK_NOT_READY_MSG = "uplink not ready, try again"
+UPLINK_STARTUP_WAIT_SECONDS = 0.3
 
 
 def _get_env_int(name, default):
@@ -145,7 +146,7 @@ class AudioManager:
                 )
                 self.uplink_cam = cam_id
                 self.uplink_ready = False
-                time.sleep(0.3)
+                time.sleep(UPLINK_STARTUP_WAIT_SECONDS)
                 if self.uplink_process.poll() is not None:
                     stderr_text = ""
                     if self.uplink_process.stderr:
