@@ -21,6 +21,8 @@ options:
 schema:
   cameras:
     - id: str
+      stream: str
+      entity_id: str?
       ip: str
       talk_port: int?
       talk_mode: list(ptt|full)?

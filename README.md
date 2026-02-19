@@ -34,8 +34,13 @@
 
 3. **Configure** (optional):
    ```yaml
-   camera_ip: "192.168.1.100"
-   rtsp_url: "rtsp://192.168.1.100:554/audio"
+   cameras:
+     - id: "front"
+       stream: "anyka_front"
+       entity_id: "camera.front"
+       ip: "192.168.1.100"
+       talk_port: 10000
+       talk_mode: ptt
    ```
 
 4. **Start** the addon
@@ -55,6 +60,15 @@
 7. **Restart** Home Assistant
 
 **📖 Detailed: [anyka_audio/README.md](anyka_audio/README.md)**
+
+### go2rtc / Frigate / Advanced Camera Card
+
+Ingress deep links support multi-camera selectors without discovering IP in Home Assistant:
+
+- `/ui/intercom?stream=anyka_front`
+- `/ui/intercom?entity_id=camera.front`
+- `/ui/intercom?id=front`
+- `/ui/intercom?stream=anyka_front&compact=1`
 
 ### Basic Usage
 
