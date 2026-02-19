@@ -3,7 +3,7 @@
 This addon enables **bidirectional audio** with Anyka-based IP cameras:
 
 - **🎤 Uplink (Talk)**: Send audio from microphone to camera via TCP
-- **🔊 Downlink (Listen)**: Receive audio from camera via RTSP to speaker
+- **🔊 Downlink (Listen)**: RTSP audio is intended to be consumed by go2rtc/WebRTC cards in Home Assistant
 
 ## Features
 
@@ -102,19 +102,7 @@ service: anyka_audio.stop_talk
 
 ### Listen (Downlink)
 
-Receive audio from the camera to your speaker:
-
-```yaml
-service: anyka_audio.start_listen
-data:
-  rtsp_url: "rtsp://192.168.1.100:554/audio"
-```
-
-To stop:
-
-```yaml
-service: anyka_audio.stop_listen
-```
+For Home Assistant dashboards, downlink is expected to be handled by your camera card (go2rtc/WebRTC). The add-on's primary UI focus is microphone uplink (talk) via Ingress.
 
 ### Bidirectional (Both)
 
@@ -191,7 +179,7 @@ The addon exposes a REST API on port 8099:
 - `GET /api/status` - Get stream status
 - `GET /health` - Health check
 
-For multi-camera setups, select target camera with query param `?cam=<id>` (for example `/?cam=front` in web UI or `/api/uplink/start?cam=front`).
+For multi-camera setups, select target camera with query param `?cam=<id>` (for example `/?cam=front` in web UI or `/api/uplink/start?cam=front`). `cam` is also accepted in `/api/uplink/chunk` and `/api/uplink/stop` to keep concurrent dashboard controls scoped to the active camera.
 
 ### Embedded dashboard card (no navigation out of card)
 
@@ -218,7 +206,7 @@ iframe.contentWindow.postMessage({ type: "anyka_talk", action: "toggle" }, addon
 
 ### No Audio Input
 
-1. Browser/mobile microphone is required for talk (no ALSA dependency inside HAOS container)
+1. Browser/mobile microphone is required for talk (no ALSA/arecord/aplay dependency inside HAOS container)
 2. Verify camera IP and port
 3. Check firewall allows TCP to camera port 10000
 
