@@ -1,0 +1,12 @@
+# Experimental Anyka two-way audio bridge using native go2rtc backchannel.
+#
+# Replace CAMERA_IP and the RTSP path/credentials with one known-working camera.
+# Keep this PoC on a trusted LAN; do not expose the Anyka talk TCP port externally.
+#
+# go2rtc exec backchannel writes PCMA (A-law, 8 kHz) to ffmpeg stdin.
+# ffmpeg copies the raw A-law stream to the Anyka TCP talk socket without transcoding.
+
+streams:
+  anyka_poc:
+    - "rtsp://CAMERA_IP:554/YOUR_WORKING_RTSP_PATH#backchannel=0"
+    - "exec:ffmpeg -hide_banner -loglevel error -f alaw -ar 8000 -ac 1 -i pipe:0 -map 0:a:0 -c:a copy -f alaw tcp://CAMERA_IP:10000#backchannel=1#audio=alaw/8000"
