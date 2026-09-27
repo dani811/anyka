@@ -32,7 +32,7 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/ThatUsernameAlreadyExist/anyka-software.git /tmp/anyka-software
           git clone --depth 1 https://github.com/ThatUsernameAlreadyExist/anyka-v4l2rtspserver.git /tmp/anyka-v4l2rtspserver
-          (cd /tmp/anyka-software && ./crosscompiler.sh)
+          (cd /tmp/anyka-software && bash ./crosscompiler.sh)
 
       - name: Build anyka-talkd
         env:
