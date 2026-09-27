@@ -76,16 +76,16 @@ static int audio_open(struct audio_session *session, int dac_volume)
         return -1;
     }
 
-    if (ak_ao_enable_speaker(session->ao, AUDIO_FUNC_ENABLE) != AK_SUCCESS) {
+    if (ak_ao_enable_speaker(session->ao, AUDIO_FUNC_ENABLE) != 0) {
         fprintf(stderr, "anyka-talkd: warning: ak_ao_enable_speaker failed\n");
     }
-    if (ak_ao_set_dac_volume(session->ao, dac_volume) != AK_SUCCESS) {
+    if (ak_ao_set_dac_volume(session->ao, dac_volume) != 0) {
         fprintf(stderr, "anyka-talkd: warning: ak_ao_set_dac_volume failed\n");
     }
-    if (ak_ao_set_aslc_volume(session->ao, DEFAULT_ASLC_VOLUME) != AK_SUCCESS) {
+    if (ak_ao_set_aslc_volume(session->ao, DEFAULT_ASLC_VOLUME) != 0) {
         fprintf(stderr, "anyka-talkd: warning: ak_ao_set_aslc_volume failed\n");
     }
-    if (ak_ao_set_resample(session->ao, AUDIO_FUNC_DISABLE) != AK_SUCCESS) {
+    if (ak_ao_set_resample(session->ao, AUDIO_FUNC_DISABLE) != 0) {
         fprintf(stderr, "anyka-talkd: warning: ak_ao_set_resample failed\n");
     }
     (void)ak_ao_clear_frame_buffer(session->ao);
@@ -155,7 +155,7 @@ static int audio_write(struct audio_session *session,
             return -1;
         }
         if (written == 0) {
-            usleep(10000);
+            { const struct timespec pause = {0, 10 * 1000 * 1000}; (void)nanosleep(&pause, NULL); }
             continue;
         }
         offset += (size_t)written;
