@@ -1,0 +1,16 @@
+# Anyka legacy two-way audio through go2rtc.
+#
+# Prerequisite on the camera:
+#   camera_talkd/anyka-talkd must be running and listening on TCP/10000.
+#
+# The browser talks WebRTC to go2rtc. go2rtc exposes a normal backchannel and
+# writes PCMA/8000 to ffmpeg stdin. ffmpeg performs codec-copy only and sends
+# the raw A-law bytes to anyka-talkd.
+#
+# Native ONVIF/RTSP Profile-T cameras do NOT need this exec source; configure
+# their RTSP/ONVIF source directly in go2rtc.
+
+streams:
+  anyka_poc:
+    - "rtsp://CAMERA_IP:554/YOUR_WORKING_RTSP_PATH#backchannel=0"
+    - "exec:ffmpeg -hide_banner -loglevel error -f alaw -ar 8000 -ac 1 -i pipe:0 -map 0:a:0 -c:a copy -f alaw tcp://CAMERA_IP:10000#backchannel=1#audio=alaw/8000"

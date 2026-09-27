@@ -1,0 +1,51 @@
+name: Anyka talkd PoC
+
+on:
+  pull_request:
+    paths:
+      - "camera_talkd/**"
+      - ".github/workflows/anyka-talkd.yml"
+  workflow_dispatch:
+
+jobs:
+  build-ak3918:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout PoC
+        uses: actions/checkout@v4
+
+      - name: Enable 32-bit runtime for Anyka cross-compiler
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y \
+            git unzip file \
+            libc6:i386 libstdc++6:i386 zlib1g:i386 \
+            libmpc3:i386 libmpfr6:i386
+          if [ ! -e /lib/i386-linux-gnu/libmpfr.so.4 ]; then
+            sudo ln -s /lib/i386-linux-gnu/libmpfr.so.6 /lib/i386-linux-gnu/libmpfr.so.4
+          fi
+
+      - name: Checkout AK3918 build inputs
+        run: |
+          git clone --depth 1 https://github.com/ThatUsernameAlreadyExist/anyka-software.git /tmp/anyka-software
+          git clone --depth 1 https://github.com/ThatUsernameAlreadyExist/anyka-v4l2rtspserver.git /tmp/anyka-v4l2rtspserver
+          (cd /tmp/anyka-software && bash ./crosscompiler.sh)
+
+      - name: Build anyka-talkd
+        env:
+          ANYKA_SOFTWARE_DIR: /tmp/anyka-software
+          ANYKA_RTSP_DIR: /tmp/anyka-v4l2rtspserver
+        run: |
+          chmod +x camera_talkd/build.sh
+          camera_talkd/build.sh
+          file camera_talkd/anyka-talkd
+
+      - name: Upload AK3918 binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: anyka-talkd-ak3918
+          path: camera_talkd/anyka-talkd
+          if-no-files-found: error
