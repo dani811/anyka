@@ -205,3 +205,8 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Camera binaries and private device evidence
+camera_talkd/anyka-talkd
+camera_talkd/build-info.txt
+.local/
