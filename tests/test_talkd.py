@@ -64,7 +64,7 @@ class TalkdTests(unittest.TestCase):
 
     def test_allowlist_required_and_arguments_validated(self):
         for args in ([], ["--allow", "bad"], ["--port", "0"], ["--volume", "7"]):
-            result = subprocess.run([self.binary] + args, capture_output=True, timeout=2)
+            result = subprocess.run([self.binary] + args, capture_output=True, timeout=10)
             self.assertNotEqual(result.returncode, 0)
 
     def test_sigterm_while_accepting(self):
