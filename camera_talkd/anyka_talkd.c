@@ -321,7 +321,8 @@ int main(int argc, char **argv)
         fprintf(stderr, "anyka-talkd: --allow IPv4 is required\n");
         return EXIT_FAILURE;
     }
-    struct sigaction action = {0};
+    struct sigaction action;
+    memset(&action, 0, sizeof(action));
     action.sa_handler = on_signal;
     sigemptyset(&action.sa_mask);
     if (sigaction(SIGINT, &action, NULL) != 0 || sigaction(SIGTERM, &action, NULL) != 0) {

@@ -5,7 +5,7 @@ Actualizado: 2026-10-09. Este documento distingue código, pruebas de host y har
 | Elemento | Evidencia disponible | Lo que no demuestra |
 |---|---|---|
 | Objetivo YI IoT | Usuario confirma cámaras genéricas chinas con esa app | Modelo, SoC, ABI o servicio de audio |
-| Copia local histórica | Configuración ISP GC1084; copia sin `/usr` | Sensor actual, identidad de una IP, backup restaurable completo |
+| Copia local histórica | `/proc/cpuinfo`: ARM926EJ-S, ARMv5TEJ, `Cloud39EV2_AK3918E80PIN_MNBD`; ELF ARM EABI5 little-endian, intérprete `/lib/ld-uClibc.so.0`, libc 0.9.33.2; ISP GC1084; copia sin `/usr` | Identidad de la cámara que se encienda ahora, bibliotecas SDK de audio o backup restaurable completo |
 | Firmware de referencia | Algunos scripts cargan GC1054; SDK Anyka incluido | Que deba instalarse ese firmware en las cámaras objetivo |
 | CI ARM del PR #17, commit 4911917 | Compilación/enlace correctos, run 37906200889 | Ejecución ni audio físico |
 | Pruebas de host | TCP, sesiones y errores mediante SDK simulado | Comportamiento del decoder/driver propietario |
