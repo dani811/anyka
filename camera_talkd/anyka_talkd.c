@@ -123,7 +123,7 @@ static void audio_close(struct audio_session *session)
         (void)ak_adec_notice_stream_end(session->adec);
     }
     if (session->stream != NULL) {
-        (void)ak_adec_cancel_stream_no_wait(session->stream);
+        (void)ak_adec_cancel_stream(session->stream);
         session->stream = NULL;
     }
     if (session->adec != NULL) {
