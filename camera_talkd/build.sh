@@ -30,7 +30,7 @@ test -f "${LIB_DIR}/libmpi_adec.so"
   -L"$LIB_DIR" \
   -Wl,-rpath,/mnt/lib \
   -Wl,--no-as-needed \
-  -lmpi_adec -lplat_ao -lplat_common \
+  -lmpi_adec -lplat_ao -lplat_common -lplat_ipcsrv \
   -lakaudiocodec -lakaudiofilter -lak_mt -lplat_thread \
   -lrt -lpthread -ldl \
   -o "$OUT"
