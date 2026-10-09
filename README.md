@@ -1,8 +1,25 @@
-# anyka
+# Anyka: cámaras YI IoT con go2rtc
 
-**Home Assistant addon for bidirectional audio with Anyka IP cameras**
+Objetivo: vídeo, escucha y audio de retorno (PTT) mediante go2rtc, con un adaptador
+mínimo para el hardware Anyka que lo necesite. **Experimental: todavía no hay una
+validación física aceptada del nuevo daemon en las cámaras YI IoT objetivo.**
 
-**🎯 NOW OPERATIONAL: Talk AND Listen to your Anyka cameras!**
+- [Arquitectura y decisiones](docs/ARCHITECTURE.md)
+- [Compatibilidad y evidencia](docs/COMPATIBILITY.md)
+- [Pruebas, despliegue manual y rollback](docs/VALIDATION.md)
+- [Adaptador AK3918](camera_talkd/README.md)
+- [Ejemplo go2rtc](poc/go2rtc-anyka/go2rtc.yaml.example)
+
+El CI valida compilación y pruebas de host; no certifica una cámara. La app YI IoT
+no determina el chipset. No usar la Teckin TC100 como evidencia para estas cámaras.
+El puerto TCP/10000 requiere un receptor compatible real: no se presupone abierto.
+
+## Implementación anterior: add-on 2.x
+
+La documentación que sigue describe el add-on anterior. Sus afirmaciones de
+funcionamiento no son evidencia de compatibilidad con las cámaras objetivo.
+Esta ruta se mantiene durante la validación y migración; no es la arquitectura
+que se pretende ampliar. No ejecutar el overlay antiguo como instalador del daemon.
 
 ## Features
 

@@ -12,6 +12,8 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netinet/in.h>
+#include <poll.h>
+#include <time.h>
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -26,12 +28,15 @@
 #include "ak_adec.h"
 
 #define DEFAULT_PORT 10000
-#define DEFAULT_DAC_VOLUME 6
+#define DEFAULT_DAC_VOLUME 2
 #define DEFAULT_ASLC_VOLUME 2
 #define SAMPLE_RATE 8000
 #define CHANNELS 1
 #define SAMPLE_BITS 16
-#define READ_BUFFER 4096
+#define READ_BUFFER 320
+#define IDLE_TIMEOUT_MS 3000
+#define SESSION_TIMEOUT_MS 120000
+#define DECODER_STALL_MS 1000
 #define DECODE_WAIT_MS 100
 
 static volatile sig_atomic_t g_stop = 0;
@@ -51,12 +56,32 @@ static void on_signal(int signo)
 static void usage(const char *program)
 {
     fprintf(stderr,
-            "Usage: %s [--port N] [--allow IPv4] [--volume 0..6]\n"
+            "Usage: %s --allow IPv4 [--port N] [--volume 0..6]\n"
             "\n"
             "Receives raw PCMA/G.711 A-law 8000 Hz mono over TCP and plays it\n"
             "through the Anyka AK3918 speaker. Only one talk session is active\n"
-            "at a time. --allow restricts clients to one IPv4 address.\n",
+            "at a time. --allow is required and restricts clients to one IPv4 address.\n",
             program);
+}
+
+static int64_t monotonic_ms(void)
+{
+    struct timespec now;
+    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
+        perror("anyka-talkd: clock_gettime");
+        exit(EXIT_FAILURE);
+    }
+    return (int64_t)now.tv_sec * 1000 + now.tv_nsec / 1000000;
+}
+
+/* Reject rather than queue another speaker session while one client owns it. */
+static void reject_waiting_client(int listener)
+{
+    int fd = accept(listener, NULL, NULL);
+    if (fd >= 0) {
+        fprintf(stderr, "anyka-talkd: rejected client (busy)\n");
+        close(fd);
+    }
 }
 
 static int audio_open(struct audio_session *session, int dac_volume)
@@ -142,6 +167,7 @@ static int audio_write(struct audio_session *session,
                        size_t length)
 {
     size_t offset = 0;
+    int64_t last_progress = monotonic_ms();
 
     while (offset < length && !g_stop) {
         int written = ak_adec_send_stream(
@@ -150,15 +176,20 @@ static int audio_write(struct audio_session *session,
             (unsigned int)(length - offset),
             DECODE_WAIT_MS);
 
-        if (written < 0) {
+        if (written < 0 || (size_t)written > length - offset) {
             fprintf(stderr, "anyka-talkd: ak_adec_send_stream failed\n");
             return -1;
         }
         if (written == 0) {
+            if (monotonic_ms() - last_progress >= DECODER_STALL_MS) {
+                fprintf(stderr, "anyka-talkd: decoder stalled\n");
+                return -1;
+            }
             { const struct timespec pause = {0, 10 * 1000 * 1000}; (void)nanosleep(&pause, NULL); }
             continue;
         }
         offset += (size_t)written;
+        last_progress = monotonic_ms();
     }
 
     return offset == length ? 0 : -1;
@@ -197,45 +228,55 @@ static int peer_allowed(const struct sockaddr_in *peer, const char *allowed_ip)
     return peer->sin_addr.s_addr == allowed.s_addr;
 }
 
-static int serve_client(int fd, const char *peer_ip, int dac_volume)
+static int serve_client(int fd, int listener, const char *peer_ip, int dac_volume)
 {
-    struct audio_session audio;
+    struct audio_session audio = {0};
     unsigned char buffer[READ_BUFFER];
-    struct timeval timeout = {1, 0};
+    struct pollfd fds[2] = {{fd, POLLIN, 0}, {listener, POLLIN, 0}};
+    int64_t started = monotonic_ms();
+    int64_t last_data = started;
+    int result = 0;
 
-    (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-
-    if (audio_open(&audio, dac_volume) != 0) {
-        return -1;
-    }
-
-    fprintf(stderr, "anyka-talkd: talk session started from %s\n", peer_ip);
-
+    fprintf(stderr, "anyka-talkd: client accepted from %s\n", peer_ip);
     while (!g_stop) {
-        ssize_t count = recv(fd, buffer, sizeof(buffer), 0);
-
-        if (count > 0) {
-            if (audio_write(&audio, buffer, (size_t)count) != 0) {
-                audio_close(&audio);
-                return -1;
-            }
-            continue;
-        }
-        if (count == 0) {
+        int64_t now = monotonic_ms();
+        if (now - last_data >= IDLE_TIMEOUT_MS || now - started >= SESSION_TIMEOUT_MS) {
+            fprintf(stderr, "anyka-talkd: session timeout\n");
             break;
         }
-        if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
-            continue;
+        int ready = poll(fds, 2, 200);
+        if (ready < 0) {
+            if (errno == EINTR) continue;
+            result = -1;
+            break;
         }
-
-        fprintf(stderr, "anyka-talkd: recv failed: %s\n", strerror(errno));
-        audio_close(&audio);
-        return -1;
+        if (fds[1].revents & POLLIN) reject_waiting_client(listener);
+        if (fds[0].revents & (POLLERR | POLLNVAL)) {
+            result = -1;
+            break;
+        }
+        if (!(fds[0].revents & (POLLIN | POLLHUP))) continue;
+        ssize_t count = recv(fd, buffer, sizeof(buffer), 0);
+        if (count == 0) break;
+        if (count < 0) {
+            if (errno == EINTR) continue;
+            result = -1;
+            break;
+        }
+        last_data = monotonic_ms();
+        /* TCP probes and idle connections must not acquire the physical speaker. */
+        if (audio.ao == NULL && audio_open(&audio, dac_volume) != 0) {
+            result = -1;
+            break;
+        }
+        if (audio_write(&audio, buffer, (size_t)count) != 0) {
+            result = -1;
+            break;
+        }
     }
-
     audio_close(&audio);
     fprintf(stderr, "anyka-talkd: talk session stopped\n");
-    return 0;
+    return result;
 }
 
 int main(int argc, char **argv)
@@ -276,8 +317,17 @@ int main(int argc, char **argv)
         }
     }
 
-    signal(SIGINT, on_signal);
-    signal(SIGTERM, on_signal);
+    if (allowed_ip == NULL) {
+        fprintf(stderr, "anyka-talkd: --allow IPv4 is required\n");
+        return EXIT_FAILURE;
+    }
+    struct sigaction action = {0};
+    action.sa_handler = on_signal;
+    sigemptyset(&action.sa_mask);
+    if (sigaction(SIGINT, &action, NULL) != 0 || sigaction(SIGTERM, &action, NULL) != 0) {
+        perror("anyka-talkd: sigaction");
+        return EXIT_FAILURE;
+    }
     signal(SIGPIPE, SIG_IGN);
 
     listener = socket(AF_INET, SOCK_STREAM, 0);
@@ -304,16 +354,19 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    fprintf(stderr,
-            "anyka-talkd: listening on 0.0.0.0:%d for raw PCMA/8000%s%s\n",
-            port,
-            allowed_ip ? " (allow=" : "",
-            allowed_ip ? allowed_ip : "");
-    if (allowed_ip != NULL) {
-        fprintf(stderr, "anyka-talkd: source allowlist enabled\n");
-    }
+    fprintf(stderr, "anyka-talkd: listening on 0.0.0.0:%d for raw PCMA/8000 (allow=%s)\n",
+            port, allowed_ip);
 
     while (!g_stop) {
+        struct pollfd waiting = {listener, POLLIN, 0};
+        int ready = poll(&waiting, 1, 200);
+        if (ready < 0) {
+            if (errno == EINTR) continue;
+            perror("anyka-talkd: poll");
+            close(listener);
+            return EXIT_FAILURE;
+        }
+        if (ready == 0) continue;
         struct sockaddr_in peer = {0};
         socklen_t peer_len = sizeof(peer);
         int client = accept(listener, (struct sockaddr *)&peer, &peer_len);
@@ -335,7 +388,7 @@ int main(int argc, char **argv)
             continue;
         }
 
-        (void)serve_client(client, peer_ip, dac_volume);
+        (void)serve_client(client, listener, peer_ip, dac_volume);
         close(client);
     }
 

@@ -1,13 +1,34 @@
-name: Anyka talkd PoC
+name: Anyka talkd validation
 
 on:
   pull_request:
     paths:
       - "camera_talkd/**"
+      - "tests/**"
+      - "poc/go2rtc-anyka/go2rtc.yaml.example"
       - ".github/workflows/anyka-talkd.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
+  host-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: TCP lifecycle with fake SDK
+        run: python3 -m unittest discover -s tests -v
+      - name: Install media test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          curl --fail --location --retry 3 https://github.com/AlexxIT/go2rtc/releases/download/v1.9.14/go2rtc_linux_amd64 -o /tmp/go2rtc
+          chmod +x /tmp/go2rtc
+      - name: PCMA transport with real go2rtc (loopback only)
+        run: python3 tests/check_go2rtc_transport.py /tmp/go2rtc
+
   build-ak3918:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -30,8 +51,14 @@ jobs:
 
       - name: Checkout AK3918 build inputs
         run: |
-          git clone --depth 1 https://github.com/ThatUsernameAlreadyExist/anyka-software.git /tmp/anyka-software
-          git clone --depth 1 https://github.com/ThatUsernameAlreadyExist/anyka-v4l2rtspserver.git /tmp/anyka-v4l2rtspserver
+          git init /tmp/anyka-software
+          git -C /tmp/anyka-software remote add origin https://github.com/ThatUsernameAlreadyExist/anyka-software.git
+          git -C /tmp/anyka-software fetch --depth 1 origin 708d8de2501e69d4978e16032813c99136f70b45
+          git -C /tmp/anyka-software checkout --detach FETCH_HEAD
+          git init /tmp/anyka-v4l2rtspserver
+          git -C /tmp/anyka-v4l2rtspserver remote add origin https://github.com/ThatUsernameAlreadyExist/anyka-v4l2rtspserver.git
+          git -C /tmp/anyka-v4l2rtspserver fetch --depth 1 origin b0b3ed9309f0508b709a1769da52449f6036f269
+          git -C /tmp/anyka-v4l2rtspserver checkout --detach FETCH_HEAD
           (cd /tmp/anyka-software && bash ./crosscompiler.sh)
 
       - name: Build anyka-talkd
@@ -47,5 +74,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: anyka-talkd-ak3918
-          path: camera_talkd/anyka-talkd
+          path: |
+            camera_talkd/anyka-talkd
+            camera_talkd/build-info.txt
           if-no-files-found: error

@@ -39,3 +39,16 @@ test -f "${LIB_DIR}/libmpi_adec.so"
 
 echo "Built: $OUT"
 file "$OUT" || true
+
+# Publish ABI/dependency evidence alongside the binary; no target execution.
+READELF="${ANYKA_SOFTWARE_DIR}/arm-anykav200-crosstool/usr/bin/${HOST}-readelf"
+{
+  printf 'source_commit='
+  git -C "$SCRIPT_DIR" rev-parse HEAD
+  printf 'toolchain_commit='
+  git -C "$ANYKA_SOFTWARE_DIR" rev-parse HEAD
+  printf 'sdk_commit='
+  git -C "$ANYKA_RTSP_DIR" rev-parse HEAD
+  sha256sum "$OUT"
+  "$READELF" -h -l -d "$OUT"
+} > "$SCRIPT_DIR/build-info.txt"

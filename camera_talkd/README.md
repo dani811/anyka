@@ -39,7 +39,7 @@ CI performs the same cross-build.
 
 ```sh
 LD_LIBRARY_PATH=/mnt/lib:/lib:/usr/lib \
-  /mnt/bin/anyka-talkd --port 10000 --allow HOME_ASSISTANT_LAN_IP
+  /mnt/bin/anyka-talkd --port 10000 --allow VERIFIED_GO2RTC_SOURCE_IP
 ```
 
 For first hardware validation, run it manually. Do not enable autostart until a
@@ -52,3 +52,17 @@ already have that protocol and should connect to go2rtc directly.
 
 For legacy Anyka, go2rtc provides the standard WebRTC-facing backchannel and
 this daemon is only the hardware compatibility endpoint.
+
+## Session policy and evidence
+
+`--allow` is mandatory. Default DAC volume is 2/6. The speaker opens on the first
+audio bytes, never on a TCP probe. An idle client is closed after 3 seconds;
+a session lasts at most 120 seconds. A stalled decoder is abandoned after 1 second
+without progress. Additional clients are rejected while one owns the session.
+
+SDK cancellation may itself block; hardware close latency is an explicit test gate.
+Host tests use a fake SDK and cannot prove hardware compatibility.
+
+See [architecture](../docs/ARCHITECTURE.md), [compatibility](../docs/COMPATIBILITY.md)
+and [validation](../docs/VALIDATION.md). The old SD overlay is not an installer for
+this daemon. Use manual, temporary deployment only after checking the target ABI.
