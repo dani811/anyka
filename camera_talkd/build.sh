@@ -24,7 +24,7 @@ test -f "${INCLUDE_DIR}/ak_adec.h"
 test -f "${LIB_DIR}/libmpi_adec.so"
 
 "$CC" \
-  -muclibc -O2 -Wall -Wextra -Werror \
+  -muclibc -std=gnu99 -O2 -Wall -Wextra -Werror \
   -I"$INCLUDE_DIR" \
   "$SCRIPT_DIR/anyka_talkd.c" \
   -L"$LIB_DIR" \
