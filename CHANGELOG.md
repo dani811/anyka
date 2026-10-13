@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.0] - 2026-10-13
+
+### Changed
+- Nuevo enfoque probado en hardware real (YI IoT AK3918 + GC1084): paquete de SD en `camera/` (RTSP, PTZ, LEDs, filtro IR, receptor de habla y API de control) y configuración de Home Assistant en `homeassistant/` (go2rtc con canal de vuelta, `shell_command` y panel).
+
+### Removed
+- Add-on Flask `anyka_audio`, integración `anyka_talk`, app de AppDaemon, `camera_sd_overlay` y su documentación (`INSTALL*`, `QUICKSTART`, `QUICK_REFERENCE`, `hacs.json`, `repository.yaml`).
+
 ## [2.0.7] - 2026-02-19
 
 ### Changed

@@ -1,6 +1,0 @@
-{
-  "name": "Anyka Talk",
-  "domains": ["anyka_talk"],
-  "homeassistant": "2026.1.0",
-  "render_readme": true
-}
