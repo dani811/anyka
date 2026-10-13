@@ -11,8 +11,20 @@ reply() {
 fail() { reply "{\"ok\":false,\"error\":\"$1\"}"; }
 
 param() {
-	# Devuelve el valor de un parámetro de QUERY_STRING, solo [a-z0-9_].
-	echo "$QUERY_STRING" | tr '&' '\n' | sed -n "s/^$1=//p" | head -1 | tr -cd 'a-z0-9_'
+	# Devuelve el valor de un parámetro de QUERY_STRING si solo tiene [a-z0-9_].
+	# Shell puro: el busybox del firmware no trae tr.
+	local IFS='&' kv v
+	set -f
+	for kv in $QUERY_STRING; do
+		case "$kv" in
+		"$1="*)
+			v=${kv#*=}
+			case "$v" in *[!a-z0-9_]*) v= ;; esac
+			echo "$v"
+			return
+			;;
+		esac
+	done
 }
 
 ptz() {
@@ -42,7 +54,8 @@ ptz)
 goto)
 	pan=$(param pan)
 	tilt=$(param tilt)
-	case "$pan$tilt" in '' | *[!0-9]*) fail bad_arg ;; esac
+	case "$pan" in '' | *[!0-9]*) fail bad_arg ;; esac
+	case "$tilt" in '' | *[!0-9]*) fail bad_arg ;; esac
 	[ "$pan" -le 360 ] && [ "$tilt" -le 180 ] || fail out_of_range
 	ptz "t2p $pan $tilt"
 	;;
