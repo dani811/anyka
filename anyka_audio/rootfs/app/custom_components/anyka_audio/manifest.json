@@ -1,9 +1,0 @@
-{
-  "domain": "anyka_audio",
-  "name": "Anyka Bidirectional Audio",
-  "documentation": "https://github.com/dani811/anyka",
-  "codeowners": [],
-  "requirements": ["aiohttp"],
-  "version": "2.0.7",
-  "iot_class": "local_push"
-}

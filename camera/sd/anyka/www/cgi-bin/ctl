@@ -1,0 +1,71 @@
+#!/bin/sh
+# API de control: GET /cgi-bin/ctl?cmd=<orden>[&arg=<valor>][&pan=N&tilt=N]
+# Solo acepta órdenes de la lista; nunca ejecuta texto recibido.
+PTZ_FIFO=/tmp/ptz.daemon
+GPIO=/sys/user-gpio
+
+reply() {
+	printf 'Content-Type: application/json\r\n\r\n%s\n' "$1"
+	exit 0
+}
+fail() { reply "{\"ok\":false,\"error\":\"$1\"}"; }
+
+param() {
+	# Devuelve el valor de un parámetro de QUERY_STRING si solo tiene [a-z0-9_].
+	# Shell puro: el busybox del firmware no trae tr.
+	local IFS='&' kv v
+	set -f
+	for kv in $QUERY_STRING; do
+		case "$kv" in
+		"$1="*)
+			v=${kv#*=}
+			case "$v" in *[!a-z0-9_]*) v= ;; esac
+			echo "$v"
+			return
+			;;
+		esac
+	done
+}
+
+ptz() {
+	[ -p "$PTZ_FIFO" ] || fail ptz_not_running
+	echo "$1" >"$PTZ_FIFO"
+}
+
+gpio_set() {
+	case "$2" in
+	on) echo 1 >"$GPIO/$1" ;;
+	off) echo 0 >"$GPIO/$1" ;;
+	*) fail bad_arg ;;
+	esac
+}
+
+cmd=$(param cmd)
+arg=$(param arg)
+
+case "$cmd" in
+ptz)
+	case "$arg" in
+	up | down | left | right | left_up | right_up | left_down | right_down) ptz "$arg" ;;
+	home) ptz init_ptz ;;
+	*) fail bad_arg ;;
+	esac
+	;;
+goto)
+	pan=$(param pan)
+	tilt=$(param tilt)
+	case "$pan" in '' | *[!0-9]*) fail bad_arg ;; esac
+	case "$tilt" in '' | *[!0-9]*) fail bad_arg ;; esac
+	[ "$pan" -le 360 ] && [ "$tilt" -le 180 ] || fail out_of_range
+	ptz "t2p $pan $tilt"
+	;;
+ir_cut) gpio_set gpio-ircut_a "$arg" ;; # on = filtro puesto = color normal de día
+ir_led) gpio_set IR_LED "$arg" ;;
+white_led) gpio_set WHITE_LED "$arg" ;;
+status)
+	reply "{\"ok\":true,\"ir_led\":$(cat $GPIO/IR_LED),\"white_led\":$(cat $GPIO/WHITE_LED),\"ir_cut\":$(cat $GPIO/gpio-ircut_a),\"ptz\":$([ -p $PTZ_FIFO ] && echo true || echo false),\"uptime\":\"$(cut -d' ' -f1 /proc/uptime)\"}"
+	;;
+*) fail unknown_cmd ;;
+esac
+
+reply '{"ok":true}'
