@@ -1,0 +1,41 @@
+# Vista del panel "Cámara YI" (sections). Crear el panel y pegar en el editor YAML.
+views:
+  - title: Cámara YI
+    path: camara
+    type: sections
+    max_columns: 2
+    sections:
+      - type: grid
+        column_span: 2
+        cards:
+          - type: heading
+            heading: Cámara YI
+            icon: mdi:cctv
+          - type: custom:webrtc-camera
+            url: yi_camara
+            mode: webrtc,mse,hls
+            media: video,audio,microphone
+            muted: true
+            ui: true
+            grid_options: {columns: full}
+      - type: grid
+        cards:
+          - {type: heading, heading: Mover, icon: mdi:arrow-all}
+          - &ptz {type: button, name: "", icon: mdi:arrow-top-left, grid_options: {columns: 4, rows: 1}, tap_action: {action: perform-action, perform_action: shell_command.yi_camara, data: {query: "cmd=ptz&arg=left_up"}}}
+          - {<<: *ptz, icon: mdi:arrow-up, tap_action: {action: perform-action, perform_action: shell_command.yi_camara, data: {query: "cmd=ptz&arg=up"}}}
+          - {<<: *ptz, icon: mdi:arrow-top-right, tap_action: {action: perform-action, perform_action: shell_command.yi_camara, data: {query: "cmd=ptz&arg=right_up"}}}
+          - {<<: *ptz, icon: mdi:arrow-left, tap_action: {action: perform-action, perform_action: shell_command.yi_camara, data: {query: "cmd=ptz&arg=left"}}}
+          - {<<: *ptz, name: Inicio, icon: mdi:home, tap_action: {action: perform-action, perform_action: shell_command.yi_camara, data: {query: "cmd=ptz&arg=home"}}}
+          - {<<: *ptz, icon: mdi:arrow-right, tap_action: {action: perform-action, perform_action: shell_command.yi_camara, data: {query: "cmd=ptz&arg=right"}}}
+          - {<<: *ptz, icon: mdi:arrow-bottom-left, tap_action: {action: perform-action, perform_action: shell_command.yi_camara, data: {query: "cmd=ptz&arg=left_down"}}}
+          - {<<: *ptz, icon: mdi:arrow-down, tap_action: {action: perform-action, perform_action: shell_command.yi_camara, data: {query: "cmd=ptz&arg=down"}}}
+          - {<<: *ptz, icon: mdi:arrow-bottom-right, tap_action: {action: perform-action, perform_action: shell_command.yi_camara, data: {query: "cmd=ptz&arg=right_down"}}}
+      - type: grid
+        cards:
+          - {type: heading, heading: Luces e IR, icon: mdi:lightbulb}
+          - &btn {type: button, name: LED blanco on, icon: mdi:lightbulb-on, grid_options: {columns: 6, rows: 1}, tap_action: {action: perform-action, perform_action: shell_command.yi_camara, data: {query: "cmd=white_led&arg=on"}}}
+          - {<<: *btn, name: LED blanco off, icon: mdi:lightbulb-off, tap_action: {action: perform-action, perform_action: shell_command.yi_camara, data: {query: "cmd=white_led&arg=off"}}}
+          - {<<: *btn, name: LED IR on, icon: mdi:led-on, tap_action: {action: perform-action, perform_action: shell_command.yi_camara, data: {query: "cmd=ir_led&arg=on"}}}
+          - {<<: *btn, name: LED IR off, icon: mdi:led-off, tap_action: {action: perform-action, perform_action: shell_command.yi_camara, data: {query: "cmd=ir_led&arg=off"}}}
+          - {<<: *btn, name: Filtro IR (día), icon: mdi:weather-sunny, tap_action: {action: perform-action, perform_action: shell_command.yi_camara, data: {query: "cmd=ir_cut&arg=on"}}}
+          - {<<: *btn, name: Sin filtro (noche), icon: mdi:weather-night, tap_action: {action: perform-action, perform_action: shell_command.yi_camara, data: {query: "cmd=ir_cut&arg=off"}}}
