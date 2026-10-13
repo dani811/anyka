@@ -24,7 +24,7 @@ mkdir -p "$OUT/anyka/bin/libre_anyka_app" "$OUT/anyka/bin/ptz"
 cp -R "$HACK/libre_anyka_app/libre_anyka_app" "$HACK/libre_anyka_app/lib" "$OUT/anyka/bin/libre_anyka_app/"
 cp -R "$HACK/ptz/ptz_daemon_dyn" "$HACK/ptz/lib" "$OUT/anyka/bin/ptz/"
 cp "$HACK/web_interface/busybox" "$OUT/anyka/bin/busybox"
-chmod +x "$OUT/Factory/config.sh" "$OUT/anyka/start.sh" "$OUT/anyka/www/cgi-bin/ctl" \
+chmod +x "$OUT/Factory/config.sh" "$OUT/anyka/start.sh" "$OUT/anyka/talk_session.sh" "$OUT/anyka/www/cgi-bin/ctl" \
 	"$OUT/anyka/bin/libre_anyka_app/libre_anyka_app" "$OUT/anyka/bin/ptz/ptz_daemon_dyn" "$OUT/anyka/bin/busybox"
 
 echo "Paquete listo en $OUT (upstream $UPSTREAM_COMMIT)"

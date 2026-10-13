@@ -39,13 +39,10 @@ ptz_init() {
 }
 
 # Habla: audio G.711 A-law 8 kHz por TCP -> altavoz. Una conexión cada vez;
-# el decodificador se rearma después de cada envío.
+# talk_session.sh corta tras 1 s sin datos y el bucle vuelve a escuchar.
 talk_loop() {
-	rm -f /tmp/talk.fifo
-	mkfifo /tmp/talk.fifo
 	while true; do
-		ak_adec_demo 8000 1 g711a /tmp/talk.fifo >>"$LOG/talk.log" 2>&1 &
-		nc -l -p "$TALK_PORT" >/tmp/talk.fifo
+		"$BASE/bin/busybox" nc -l -p "$TALK_PORT" -e "$BASE/talk_session.sh" >>"$LOG/talk.log" 2>&1
 		sleep 1
 	done
 }
