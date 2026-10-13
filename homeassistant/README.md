@@ -19,6 +19,19 @@ La segunda línea es el canal de vuelta: go2rtc pasa el micrófono del navegador
 (PCMA 8 kHz) a ffmpeg, que lo manda al receptor de la cámara en `:10000`. Tras editar,
 recarga la integración WebRTC Camera.
 
+### Cámara montada de lado
+
+Si la imagen sale girada, go2rtc la gira transcodificando en el host de HA (la cámara no
+puede): cambia la primera fuente del stream por
+
+```yaml
+    - ffmpeg:rtsp://IP_CAMARA:554/vs0#video=h264#rotate=-90#audio=copy
+```
+
+(`-90` = 90° a la izquierda, `90` a la derecha, `180`). El canal de vuelta no cambia. Si
+además usas una entidad Generic Camera, apúntala a `rtsp://127.0.0.1:8554/<stream>` para
+que también salga girada.
+
 ## 2. Control (`configuration.yaml`)
 
 ```yaml
