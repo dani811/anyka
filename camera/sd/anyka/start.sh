@@ -12,7 +12,9 @@ log() { echo "$(date '+%H:%M:%S') $*" >>"$LOG/start.log"; }
 video_loop() {
 	while true; do
 		log "video: start"
-		( cd /tmp && LD_LIBRARY_PATH="$BASE/bin/libre_anyka_app/lib" \
+		# SIGPIPE ignorado: si no, un cliente que cierra la conexión de :3000 o :554
+		# antes de tiempo mata libre_anyka_app (exit 141) y se corta el vídeo.
+		( trap '' PIPE; cd /tmp && LD_LIBRARY_PATH="$BASE/bin/libre_anyka_app/lib" \
 			"$BASE/bin/libre_anyka_app/libre_anyka_app" \
 			-w "$VIDEO_SUB_WIDTH" -h "$VIDEO_SUB_HEIGHT" -m 0 $VIDEO_ARGS ) >>"$LOG/video.log" 2>&1
 		log "video: exit $?"

@@ -47,6 +47,11 @@ gris a plena luz; esta cámara usa `-i 1`.
 Solo acepta esas órdenes. Para limitarla a Home Assistant, pon su IP en
 `CTL_ALLOW_IP` de `sd/anyka/anyka.conf`.
 
+⚠️ Una conexión TCP vacía al puerto 3000 (un escaneo de puertos o un monitor tipo
+"¿está abierto?") hace caer `libre_anyka_app` (fallo conocido del binario; ver
+`docs/troubleshooting.md` de jphein). `start.sh` lo relanza en ~5 s, pero el vídeo se
+corta. Para comprobar la foto usa un GET real (`curl …/snapshot.jpeg`), nunca `nc -z`.
+
 ⚠️ El RTSP, la foto, la habla y el FTP del firmware no tienen contraseña: la cámara
 no debe ser accesible desde Internet.
 
