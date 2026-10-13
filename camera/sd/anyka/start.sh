@@ -36,6 +36,12 @@ ptz_init() {
 	while [ ! -p /tmp/ptz.daemon ] && [ $i -lt 30 ]; do sleep 1; i=$((i + 1)); done
 	[ -p /tmp/ptz.daemon ] || { log "ptz: sin FIFO"; return; }
 	[ "$PTZ_HOME_ON_BOOT" = 1 ] && echo init_ptz >/tmp/ptz.daemon
+	# Filtro IR puesto (color normal de día). Algo del arranque de vídeo/PTZ deja el
+	# pin a 0, así que se pone después. set_ir_cut del ptz_daemon no mueve el filtro
+	# en esta placa; el pin sí (1 = puesto, 0 = quitado e imagen magenta).
+	sleep 10
+	echo 1 >/sys/user-gpio/gpio-ircut_a
+	log "ir_cut: puesto"
 }
 
 # Habla: audio G.711 A-law 8 kHz por TCP -> altavoz. Una conexión cada vez;
@@ -58,10 +64,6 @@ ctl_start() {
 	"$BASE/bin/busybox" httpd -p "$CTL_PORT" -h "$BASE/www" -c "$conf"
 	log "ctl: httpd en :$CTL_PORT"
 }
-
-# Filtro IR puesto (color normal de día). set_ir_cut del ptz_daemon no mueve el
-# filtro en esta placa; el pin sí (1 = puesto, 0 = quitado/imagen magenta).
-echo 1 >/sys/user-gpio/gpio-ircut_a
 
 # libre_anyka_app necesita el driver de cámara que carga /usr/sbin/camera.sh en rc.local.
 sleep 10
