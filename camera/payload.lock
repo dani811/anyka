@@ -1,0 +1,4 @@
+# Origen fijado de los binarios ARM (libre_anyka_app, ptz_daemon_dyn, busybox con httpd).
+# Probados en YI IoT AK3918 + GC1084 + ssv6x5x el 2026-10-13.
+UPSTREAM_REPO=https://github.com/jphein/anyka3918-gc1084-camera.git
+UPSTREAM_COMMIT=4b8e3e094d92649a9c95ceb065a9456a3d063ee3
