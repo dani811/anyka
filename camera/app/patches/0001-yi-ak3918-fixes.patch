@@ -1,0 +1,98 @@
+--- a/cross-compile/libre_anyka_app/http_server.h	2026-10-13 14:57:26
++++ b/cross-compile/libre_anyka_app/http_server.h	2026-10-13 15:07:37
+@@ -83,6 +83,8 @@
+   ret =read(fd,buffer,BUFSIZE);   /* read Web request in one go */
+   if(ret == 0 || ret == -1) {  /* read failure stop now */
+     logger(FORBIDDEN,"failed to read browser request","",fd);
++    close(fd);
++    return;
+   }
+   if(ret > 0 && ret < BUFSIZE)  /* return code is valid chars */
+     buffer[ret]=0;    /* terminate the buffer */
+@@ -93,6 +95,8 @@
+   logger(LOG,"request",buffer,hit);
+   if( strncmp(buffer,"GET ",4) && strncmp(buffer,"get ",4) ) {
+     logger(FORBIDDEN,"Only simple GET operation supported",buffer,fd);
++    close(fd);
++    return;
+   }
+   for(i=4;i<BUFSIZE;i++) { /* null terminate after the second space to ignore extra stuff */
+     if(buffer[i] == ' ') { /* string is "GET URL " +lots of other stuff */
+@@ -103,6 +107,8 @@
+   for(j=0;j<i-1;j++)   /* check for illegal parent directory use .. */
+     if(buffer[j] == '.' && buffer[j+1] == '.') {
+       logger(FORBIDDEN,"Parent directory (..) path names not supported",buffer,fd);
++      close(fd);
++      return;
+     }
+   if( !strncmp(&buffer[0],"GET /\0",6) || !strncmp(&buffer[0],"get /\0",6) ) /* convert no filename to index file */
+     (void)strcpy(buffer,"GET /index.html");
+@@ -117,7 +123,11 @@
+       break;
+     }
+   }
+-  if(fstr == 0) logger(FORBIDDEN,"file extension type not supported",buffer,fd);
++  if(fstr == 0) {
++    logger(FORBIDDEN,"file extension type not supported",buffer,fd);
++    close(fd);
++    return;
++  }
+ 
+ 
+   // SNAPSHOT
+@@ -195,7 +205,11 @@
+ 	if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+ 		loge("Could not create server socket");
+ 
++	/* Al relanzar tras una caída el puerto sigue en TIME_WAIT y bind falla sin esto. */
++	int reuse = 1;
++	(void)setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+ 
++
+ 	serv_addr.sin_family = AF_INET;
+ 	serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+ 	serv_addr.sin_port = htons(port);
+--- a/cross-compile/libre_anyka_app/main.c
++++ b/cross-compile/libre_anyka_app/main.c
+@@ -43,8 +43,7 @@
+ #include "ak_ipc_srv.h"
+ #include "ak_venc.h"
+ #include "ak_sd_card.h"
+-#include "ak_dvr_file.h"
+-#include "record_common.h"
++/* ak_dvr_file.h y record_common.h no se publicaron con el SDK y no se usan. */
+ 
+ // App includes
+ //#include "convert.h"
+@@ -583,16 +582,18 @@
+ 	}
+ 
+ 	int ret = AK_FAILED;
++	/* YI IoT AK3918: gpio-ircut_a 1 = filtro puesto (color de día), 0 = quitado.
++	 * El original escribía !ir_val y dejaba el filtro quitado de día (imagen magenta). */
+ 	if (day_val) {
+ 		ak_print_notice("now set to day\n");
+-		camera_set_ir(!ir_val, IRCUT_A_FILE_NAME);
++		camera_set_ir(1, IRCUT_A_FILE_NAME);
+ 		ret = ak_vi_switch_mode(vi_handle, VI_MODE_DAY);
+-		camera_set_ir(!ir_val, IRLED_FILE_NAME);
++		camera_set_ir(0, IRLED_FILE_NAME);
+ 	} else {
+ 		ak_print_notice("now set to night\n");
+-		camera_set_ir(!ir_val, IRLED_FILE_NAME);
++		camera_set_ir(1, IRLED_FILE_NAME);
+ 		ret = ak_vi_switch_mode(vi_handle, VI_MODE_NIGHT);
+-		camera_set_ir(!ir_val, IRCUT_A_FILE_NAME);
++		camera_set_ir(0, IRCUT_A_FILE_NAME);
+ 	}
+ 
+ 	ak_sleep_ms(300);
+@@ -838,6 +839,8 @@
+ 	if (parse_args(argc, argv) < 0) return -1;
+ 
+ 	signal(SIGINT, my_handler);
++	/* A client that disconnects mid-write must not kill the app. */
++	signal(SIGPIPE, SIG_IGN);
+ 	if (access(SAVE_PATH, W_OK) != 0) {
+ 		if (mkdir(SAVE_PATH, 0755)) {
+ 			printf("mkdir: %s, %s\n", SAVE_PATH, strerror(errno));
