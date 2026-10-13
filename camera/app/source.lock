@@ -1,0 +1,6 @@
+# Código de libre_anyka_app (GPLv3) y SDK de Anyka (cabeceras + .so), del trabajo de Gerge.
+APP_REPO=https://github.com/VGerris/Anyka_ak3918_hacking_journey.git
+APP_COMMIT=2001d8b68b4bf946719cf5addf96f95e84d05f1b
+# Toolchain arm-anykav200-linux-uclibcgnueabi (la que usa el build.sh de Gerge).
+TOOLCHAIN_URL=https://github.com/helloworld-spec/qiwen/raw/6c86facd09a5c2efe5314a669f653fa90acbc999/anycloud39ev300/SDK/tools/anyka_uclibc_gcc.tar.bz2
+TOOLCHAIN_SHA256=e88bf9fca2b16f0e868ae36bb31bb4d62536d7720aadff5304ddeefc8d31df4e

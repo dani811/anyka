@@ -32,5 +32,6 @@ Se llama con `shell_command.yi_camara` y `data: {query: "cmd=ptz&arg=up"}`; órd
 ## 3. Panel
 
 `dashboard.yaml`: tarjeta `custom:webrtc-camera` con `media: video,audio,microphone`
-y botones de PTZ, LEDs y filtro IR. El micrófono del navegador solo funciona si HA se
+y botones de PTZ, LEDs y filtro IR. Lo natural es añadir esa sección a la vista de
+cámaras que ya tengas (en esta casa: Control → Cámaras), no crear un panel aparte. El micrófono del navegador solo funciona si HA se
 abre por HTTPS.

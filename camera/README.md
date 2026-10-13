@@ -40,25 +40,31 @@ hack del Teckin TC100 (falta `libakmedialib.so`) y `anyka-talkd` (faltan librer�
 | LED blanco | `ctl?cmd=white_led&arg=on` / `off` |
 | Estado | `ctl?cmd=status` |
 
-El filtro IR se mueve escribiendo el pin `gpio-ircut_a`; `set_ir_cut` del `ptz_daemon` no
-lo mueve en esta placa. Con `VIDEO_ARGS="-i 4"` (inversión día/noche) la imagen sale en
-gris a plena luz; esta cámara usa `-i 1`.
+El filtro IR se mueve escribiendo el pin `gpio-ircut_a` (1 = puesto); `set_ir_cut` del
+`ptz_daemon` no lo mueve en esta placa. Con `VIDEO_ARGS="-i 4"` (inversión día/noche) la
+imagen sale en gris a plena luz; esta cámara usa `-i 1`.
 
 Solo acepta esas órdenes. Para limitarla a Home Assistant, pon su IP en
 `CTL_ALLOW_IP` de `sd/anyka/anyka.conf`.
 
-⚠️ Una conexión TCP vacía al puerto 3000 (un escaneo de puertos o un monitor tipo
-"¿está abierto?") hace caer `libre_anyka_app` (fallo conocido del binario; ver
-`docs/troubleshooting.md` de jphein). `start.sh` lo relanza en ~5 s, pero el vídeo se
-corta. Para comprobar la foto usa un GET real (`curl …/snapshot.jpeg`), nunca `nc -z`.
-
 ⚠️ El RTSP, la foto, la habla y el FTP del firmware no tienen contraseña: la cámara
 no debe ser accesible desde Internet.
+
+## Nuestro `libre_anyka_app`
+
+Se compila desde el código de Gerge (`app/source.lock`) con los parches de `app/patches/`,
+usando la toolchain de Anyka dentro de Docker (`app/build.sh`, Docker Desktop arrancado):
+
+- El servidor de fotos (:3000) cierra y sigue cuando rechaza una petición; antes una
+  conexión vacía (un escaneo de puertos) tumbaba el programa con SIGSEGV.
+- `SO_REUSEADDR` en :3000: al relanzarse, el puerto ya no se queda sin abrir.
+- SIGPIPE ignorado: un cliente que corta a mitad de envío no lo mata.
+- Filtro IR con la polaridad de esta cámara: de día queda puesto (antes, imagen magenta).
 
 ## Instalar
 
 ```sh
-camera/fetch-payload.sh          # descarga binarios del commit fijado en payload.lock
+camera/fetch-payload.sh          # compila libre_anyka_app y descarga el resto (payload.lock)
 camera/install.sh 192.168.68.103 # copia de seguridad + subida por FTP
 ```
 
@@ -67,7 +73,7 @@ o saca la SD.
 
 ## Origen de los binarios
 
-`libre_anyka_app`, `ptz_daemon_dyn` y `busybox` vienen de
+`ptz_daemon_dyn`, `busybox` y las librerías de `libre_anyka_app` vienen de
 [jphein/anyka3918-gc1084-camera](https://github.com/jphein/anyka3918-gc1084-camera)
 (GPLv3, basado en el trabajo de Gerge y kuhnchris). No se versionan aquí; se
 descargan del commit fijado en `payload.lock`.

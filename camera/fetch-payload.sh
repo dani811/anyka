@@ -21,7 +21,12 @@ git -C "$SRC" checkout -q "$UPSTREAM_COMMIT"
 HACK="$SRC/reference/sd-card-hack/anyka_hack"
 cp -R "$HERE/sd" "$OUT"
 mkdir -p "$OUT/anyka/bin/libre_anyka_app" "$OUT/anyka/bin/ptz"
-cp -R "$HACK/libre_anyka_app/libre_anyka_app" "$HACK/libre_anyka_app/lib" "$OUT/anyka/bin/libre_anyka_app/"
+# libre_anyka_app se compila desde el código con nuestros parches (app/build.sh);
+# del paquete de jphein solo se usan sus librerías.
+APP_BIN="$BUILD/app/libre_anyka_app"
+[ -f "$APP_BIN" ] || "$HERE/app/build.sh"
+cp "$APP_BIN" "$OUT/anyka/bin/libre_anyka_app/libre_anyka_app"
+cp -R "$HACK/libre_anyka_app/lib" "$OUT/anyka/bin/libre_anyka_app/"
 cp -R "$HACK/ptz/ptz_daemon_dyn" "$HACK/ptz/lib" "$OUT/anyka/bin/ptz/"
 cp "$HACK/web_interface/busybox" "$OUT/anyka/bin/busybox"
 chmod +x "$OUT/Factory/config.sh" "$OUT/anyka/start.sh" "$OUT/anyka/talk_session.sh" "$OUT/anyka/www/cgi-bin/ctl" \
