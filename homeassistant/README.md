@@ -48,3 +48,27 @@ Se llama con `shell_command.yi_camara` y `data: {query: "cmd=ptz&arg=up"}`; órd
 y botones de PTZ, LEDs y filtro IR. Lo natural es añadir esa sección a la vista de
 cámaras que ya tengas (en esta casa: Control → Cámaras), no crear un panel aparte. El micrófono del navegador solo funciona si HA se
 abre por HTTPS.
+
+## 4. Pulsar para hablar en Advanced Camera Card (`go2rtc_proxy`)
+
+Advanced Camera Card solo tiene botón de llamada con micrófono pulsado si usa su
+proveedor `go2rtc`, y el navegador tiene que llegar a go2rtc por HTTPS. El componente
+`custom_components/go2rtc_proxy` (instalable con HACS desde este repositorio) publica
+la API de go2rtc dentro de HA, solo para usuarios autenticados:
+
+```yaml
+# configuration.yaml
+go2rtc_proxy:
+  url: http://localhost:1984   # go2rtc de la integración WebRTC Camera
+```
+
+```yaml
+# cámara en la card
+- camera_entity: camera.192_168_68_103
+  live_provider: go2rtc
+  go2rtc:
+    url: /api/go2rtc_proxy      # empieza por "/": la card firma la ruta con HA
+    stream: yi_camara
+  capabilities:
+    force: ['2-way-audio']      # el canal de vuelta exec no aparece en /api/streams
+```
