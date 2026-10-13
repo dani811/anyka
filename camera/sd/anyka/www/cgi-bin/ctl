@@ -59,17 +59,11 @@ goto)
 	[ "$pan" -le 360 ] && [ "$tilt" -le 180 ] || fail out_of_range
 	ptz "t2p $pan $tilt"
 	;;
-ir_cut)
-	case "$arg" in
-	on) ptz "set_ir_cut 1" ;;
-	off) ptz "set_ir_cut 0" ;;
-	*) fail bad_arg ;;
-	esac
-	;;
+ir_cut) gpio_set gpio-ircut_a "$arg" ;; # on = filtro puesto = color normal de día
 ir_led) gpio_set IR_LED "$arg" ;;
 white_led) gpio_set WHITE_LED "$arg" ;;
 status)
-	reply "{\"ok\":true,\"ir_led\":$(cat $GPIO/IR_LED),\"white_led\":$(cat $GPIO/WHITE_LED),\"ptz\":$([ -p $PTZ_FIFO ] && echo true || echo false),\"uptime\":\"$(cut -d' ' -f1 /proc/uptime)\"}"
+	reply "{\"ok\":true,\"ir_led\":$(cat $GPIO/IR_LED),\"white_led\":$(cat $GPIO/WHITE_LED),\"ir_cut\":$(cat $GPIO/gpio-ircut_a),\"ptz\":$([ -p $PTZ_FIFO ] && echo true || echo false),\"uptime\":\"$(cut -d' ' -f1 /proc/uptime)\"}"
 	;;
 *) fail unknown_cmd ;;
 esac

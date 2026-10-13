@@ -14,13 +14,13 @@ video_loop() {
 		log "video: start"
 		( cd /tmp && LD_LIBRARY_PATH="$BASE/bin/libre_anyka_app/lib" \
 			"$BASE/bin/libre_anyka_app/libre_anyka_app" \
-			-w "$VIDEO_SUB_WIDTH" -h "$VIDEO_SUB_HEIGHT" -m 0 -i 4 -u ) >>"$LOG/video.log" 2>&1
+			-w "$VIDEO_SUB_WIDTH" -h "$VIDEO_SUB_HEIGHT" -m 0 $VIDEO_ARGS ) >>"$LOG/video.log" 2>&1
 		log "video: exit $?"
 		sleep 5
 	done
 }
 
-# Motores e IR-cut: lee órdenes de la FIFO /tmp/ptz.daemon.
+# Motores: lee órdenes de la FIFO /tmp/ptz.daemon.
 ptz_loop() {
 	while true; do
 		log "ptz: start"
@@ -36,7 +36,6 @@ ptz_init() {
 	while [ ! -p /tmp/ptz.daemon ] && [ $i -lt 30 ]; do sleep 1; i=$((i + 1)); done
 	[ -p /tmp/ptz.daemon ] || { log "ptz: sin FIFO"; return; }
 	[ "$PTZ_HOME_ON_BOOT" = 1 ] && echo init_ptz >/tmp/ptz.daemon
-	echo init_ir >/tmp/ptz.daemon
 }
 
 # Habla: audio G.711 A-law 8 kHz por TCP -> altavoz. Una conexión cada vez;
@@ -62,6 +61,10 @@ ctl_start() {
 	"$BASE/bin/busybox" httpd -p "$CTL_PORT" -h "$BASE/www" -c "$conf"
 	log "ctl: httpd en :$CTL_PORT"
 }
+
+# Filtro IR puesto (color normal de día). set_ir_cut del ptz_daemon no mueve el
+# filtro en esta placa; el pin sí (1 = puesto, 0 = quitado/imagen magenta).
+echo 1 >/sys/user-gpio/gpio-ircut_a
 
 # libre_anyka_app necesita el driver de cámara que carga /usr/sbin/camera.sh en rc.local.
 sleep 10

@@ -35,10 +35,14 @@ hack del Teckin TC100 (falta `libakmedialib.so`) y `anyka-talkd` (faltan librer�
 |---|---|
 | Mover | `ctl?cmd=ptz&arg=up` (`down`, `left`, `right`, `left_up`, …, `home`) |
 | Ir a posición | `ctl?cmd=goto&pan=180&tilt=60` (tilt 0 = arriba) |
-| Filtro IR | `ctl?cmd=ir_cut&arg=on` / `off` |
+| Filtro IR | `ctl?cmd=ir_cut&arg=on` (puesto, color normal) / `off` (quitado, imagen magenta) |
 | LED IR | `ctl?cmd=ir_led&arg=on` / `off` |
 | LED blanco | `ctl?cmd=white_led&arg=on` / `off` |
 | Estado | `ctl?cmd=status` |
+
+El filtro IR se mueve escribiendo el pin `gpio-ircut_a`; `set_ir_cut` del `ptz_daemon` no
+lo mueve en esta placa. Con `VIDEO_ARGS="-i 4"` (inversión día/noche) la imagen sale en
+gris a plena luz; esta cámara usa `-i 1`.
 
 Solo acepta esas órdenes. Para limitarla a Home Assistant, pon su IP en
 `CTL_ALLOW_IP` de `sd/anyka/anyka.conf`.
